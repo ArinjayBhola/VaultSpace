@@ -6,7 +6,7 @@
 2. Apply the tracked Drizzle migrations with `npm run db:migrate`. The first migration enables `pg_trgm`; the next adds full-text/trigram indexes and a folder-cycle trigger. Do not replace these migrations with `drizzle-kit push`, which omits handwritten SQL.
 3. Create a **private** Cloudflare R2 bucket. Disable public `r2.dev` access and public custom domains. Create an API token scoped to that bucket with the read/write/delete/multipart permissions the application requires.
 4. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME`. Override `R2_ENDPOINT` only when necessary.
-5. Adapt [deploy/r2-cors.json](deploy/r2-cors.json) to the exact development and production origins. Remove the placeholder origin. Allow browser PUT uploads and GET/HEAD signed reads; expose ETag. Never use `*` for origins.
+5. Apply [deploy/r2-cors.json](deploy/r2-cors.json) in Cloudflare R2 → your bucket → Settings → CORS policy. It allows `http://localhost:3000` and `https://vaultspace-blond.vercel.app`. Update the policy if your production domain changes. Pushing this file to GitHub or deploying Vercel does not update the bucket policy. Allow browser PUT uploads and GET/HEAD signed reads; expose ETag. Never use `*` for origins.
 6. Configure an R2 lifecycle rule for `staging/`: expire objects after two days and abort incomplete multipart uploads after seven days (or the provider-supported equivalent). The application cleans sessions after their 24-hour expiry; bucket lifecycle is a backstop for outages between R2 creation and database acknowledgement. Do not apply automatic expiry to `originals/` or `derived/`.
 
 ## Authentication and first deploy

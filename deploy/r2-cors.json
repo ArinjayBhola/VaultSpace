@@ -1,6 +1,6 @@
 [
   {
-    "AllowedOrigins": ["http://localhost:3000", "https://vault.example.com"],
+    "AllowedOrigins": ["http://localhost:3000", "https://vaultspace-blond.vercel.app"],
     "AllowedMethods": ["PUT", "GET", "HEAD"],
     "AllowedHeaders": ["Content-Type", "Content-Length", "x-amz-checksum-crc32", "x-amz-checksum-sha256", "x-amz-sdk-checksum-algorithm"],
     "ExposeHeaders": ["ETag", "Content-Length", "Accept-Ranges", "Content-Range"],
