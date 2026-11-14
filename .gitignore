@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env*
+!.env.example
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.vercel/
+public/pdf.worker.min.mjs
+audit-production.json
+
+*.db-shm
+*.db-wal

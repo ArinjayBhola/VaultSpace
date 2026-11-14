@@ -1,0 +1,103 @@
+# Implementation status
+
+Updated 2026-11-14. Local application implementation; hosted release and broader browser acceptance remain pending.
+
+## Current application
+
+- Single-owner Better Auth login, private sessions and account/security controls.
+- Verified R2 image/PDF uploads, multipart transfers, genuine progress, animated verification, private downloads/previews and durable thumbnail processing.
+- Nested folders, collections, rename/description/move/star, bulk operations, trash, recovery and confirmed permanent deletion.
+- PDF reader with extraction, annotations, notes, bookmarks and reading progress. Scanned PDFs explicitly require OCR; no OCR pipeline is bundled.
+- Database-backed filename/trigram and PDF full-text search with filters, snippets, page references, sorting and pagination.
+- Secure, revocable, optionally password-protected share links.
+- Real analytics, three-entry overview activity and a paginated activity page, settings, local-time presentation (IST for Indian devices), larger text, custom controls and scrollable navigation.
+- Inngest durable processing/cleanup; persistent local runner starts with `npm run dev`. Production requires signed provider configuration.
+
+## AI removal
+
+The owner requested removal of all AI and semantic-search features. Removed inference clients, summary endpoint and draft UI, semantic controls/ranking, provider/model environment variables, vector-index script and AI settings. Retained PDF text extraction and thumbnail processing as ordinary file features; retry actions are named reprocess.
+
+Generated and applied migration 0005. It drops `file_embeddings` and its vector indexes, the generated image-caption column, and AI-only settings columns. It rebuilds the full-text metadata index, removes obsolete AI state and attempts to drop the unused vector extension without CASCADE. Existing tracked migrations/snapshots remain unchanged for reliable upgrades. No original R2 files, PDF annotations or extracted text are removed by this migration.
+
+## Validation and limitations
+
+Automated test suites and test-runner dependencies were removed at the owner's request. No new test files are created and no automated tests are run. Source validation uses strict TypeScript, ESLint and a production build; live database catalog checks verify migration results. Full browser workflows are not claimed as verified.
+
+Production deployment, recovery rehearsal, accessibility/performance review and configured cloud workflow acceptance remain pending. No upload resumability across reloads, OCR, malware scanner, passkeys or 2FA are implemented. Default upload ceiling is 1 GiB (configurable up to 5 GiB); processing defaults to 50 MiB and 2,000 PDF pages. Bulk downloads use individual browser downloads.
+
+Current checks: production build, strict TypeScript and ESLint passed. Database catalog checks confirmed embeddings, vector indexes, vector extension and AI columns are absent; the ordinary text-search index exists and all three file records remain. Drizzle generation reports no further schema changes. No automated tests were run.
+
+## Details freshness and subtle interface refinement
+
+The completed uploaded PDF was ready in PostgreSQL, while the open details dialog retained its earlier file-object snapshot. Replaced that static dialog body with an owner-authenticated details query that fetches current metadata and refreshes every three seconds during pending/preparing states. It exposes no R2 object keys or session data. Ordinary PDF extraction and preview creation remain; no AI code was reintroduced.
+
+Redesigned details with a document preview, compact metadata rows, explicit preview/text-search status, retry handling and an Open PDF action. Reduced normal interface text by roughly half to one pixel, refined cards/navigation/dialog styling and moved initial modal focus to its accessible heading. Owner credentials and files were unchanged.
+
+Strict TypeScript and ESLint passed. No automated tests were added or run; browser interaction was not verified in this update.
+
+## Workspace UX and sharing visibility
+
+- Refined workspace navigation, cards, search, toolbars, tables, empty states and small-screen layouts. Added removable filter chips and clear-all behavior, accurate page result ranges, Ctrl/Cmd+A page selection and Escape clearing, a sticky selection toolbar, search clearing, account navigation, and mobile navigation focus/scroll management. Typography remains compact.
+- Shared files show a Revoke sharing action. The Sharing details menu works for images and PDFs. The document reader includes per-file shared-link creation/history, created/expiration/last-opened dates, actual access counts, active-viewer counts and confirmed Expire now actions. Link records are server-filtered and paginated.
+- Removed the oversized PDF page-number input; compact previous/next controls and a page counter preserve page navigation.
+- Migration 0006 adds `share_viewers`: hashed per-tab viewer identifiers, recent heartbeat timestamps and short-lived expiry. Public presence requires a live share and valid signed HttpOnly grant, has origin/input/rate controls, and reports visible authorized tabs seen within 45 seconds. It measures viewing sessions, not unique people. Owner counts refresh every five seconds; public heartbeats occur every 15 seconds, leaving/removal is best effort, and stale rows are pruned by cleanup.
+- Active presence revalidates the share and renews the five-minute grant while the page is visible; a revoked/expired share stops rendering when the next heartbeat detects it. Revocation deletes presence rows. AI and vector storage remain absent.
+- No automated tests were added or run. Browser interaction is not claimed as verified.
+
+Verification for this update: migration 0006 applied; live read-only queries confirmed the presence index exists and AI/vector tables remain absent. Real sharing aggregation returned one link, one validated view and zero active viewers at inspection time. Production build passed, with subsequent TypeScript/lint checks covering the final source refinements. No browser interaction or automated tests are claimed as executed.
+
+## Collapsible sidebar and clearer preparation history
+
+Added an accessible desktop collapse/expand control beside search, a compact icon rail with labeled navigation, matching workspace width adjustment, and a device-persisted preference. Mobile retains its full navigation drawer.
+
+Renamed Processing history to File preparation and added a plain explanation of PDF text extraction, preview generation and storage cleanup. History is collapsed by default. The owner-protected settings response now indicates whether each job matches its file's current processing generation; older attempts are labeled previous and cannot trigger retry controls. No history records were deleted and no processing status was fabricated.
+
+Strict TypeScript passed. No automated tests were added or run; browser interaction was not verified in this update.
+
+## Tooltips and settings simplification
+
+Added shared Radix tooltip primitives/provider and descriptive hover/focus tooltips to 67 labeled interactive controls, plus shared button/select controls for future reuse. Composition preserves dropdown/popover/modal triggers and existing action labels; tooltip content renders in a portal and supports keyboard dismissal. Native duplicate titles were removed from wrapped controls.
+
+Removed preparation history, related Settings state/types, job queries/polling and obsolete history CSS. Current preparation status/retry and durable job execution remain functional outside Settings. Updated error text to avoid directing users to the removed history. Hid only the sidebar scrollbar; wheel, trackpad, touch and keyboard scrolling remain enabled. Navigation, search and profile controls remain in place, matching the owner's clarification.
+
+No automated tests were created or run; browser interaction is not claimed as verified.
+
+Tooltips/settings update validation: production build, strict TypeScript and ESLint passed. No test files were added and no automated tests were run.
+
+## Expanded product UI/UX pass
+
+- New overview welcome panel with a real active-storage donut, MIME-based byte breakdown, real monthly-upload count, working upload/new-folder actions and quick navigation. Statistics are linked to relevant views.
+- More deliberate workspace hierarchy, compact typography, unified surface/border/button styling, dark-theme treatment and mobile layouts, centralized in `src/app/design.css`.
+- File cards gain accessible hover/focus star/detail actions and working shared-access indicators; touch devices retain visible controls. File-drop feedback covers the workspace and respects the current destination folder.
+- Settings has URL-addressable, keyboard-accessible Account/Appearance/Storage/Security sections. Existing forms retain state across tab changes. Appearance uses visual theme/view/density cards with real persisted preferences. Upload concurrency moved into Storage.
+- Password visibility controls use a shared forwarded-ref input and apply to login, account password forms and password-protected sharing. Password values are not logged or persisted by the visibility control.
+- Sharing pages gain actual filtered access/presence summaries, clearer status chips, file navigation and mobile table presentation. Activity text uses readable event labels; upload charts include accessible descriptions of actual daily values.
+- No automated tests were created or run. Browser interaction was not verified during this pass. Existing AI removal, private storage, owner authorization, hidden sidebar scrollbar and tooltips are preserved.
+
+Validation for the expanded design pass: production build, strict TypeScript and ESLint passed. There were no database schema changes, no new test files, and no automated tests were run. Full browser visual/interaction verification remains unexecuted.
+
+## Density behavior and input guidance
+
+Consolidated the previous partial compact styles into a shared density-token policy in the final design stylesheet. Both layouts now set explicit file preview/grid spacing, metadata/folder padding, list-row padding, Settings/form/group spacing and related panel spacing. Mobile receives corresponding values; fonts and interactive control sizes remain readable. Settings reports the active persisted choice immediately.
+
+Added contextual placeholders to 16 previously uncovered text/password/number/readonly fields and textareas, including metadata forms, PDF notes/bookmarks, account/password fields, share forms and duplicate-file naming. Shared inputs supply type-appropriate fallbacks for future fields; checkbox, radio, range, file and other unsupported placeholder types are excluded. No credentials or data were changed.
+
+No automated tests were added or run; browser interaction is not claimed as verified.
+
+## Font family and size preferences
+
+Added Appearance typography controls for Inter, DM Sans, Manrope, System and Georgia, with small/default/large/extra-large base text sizes, a live preview, immediate device persistence and reset. Bundled DM Sans/Manrope locally and corrected Inter's font-family name to match its bundled variable font.
+
+A global preference synchronizer validates stored identifiers against allowlists and updates document-root CSS properties. All app stylesheet pixel font sizes and 65 inline interface font sizes use the same scale, so dialogs/tooltips also follow the preference. Mobile text inputs retain a minimum 16px font; no layout/PDF scaling or credential/database changes were introduced.
+
+Strict TypeScript and ESLint passed. No test files were added or automated tests run; browser interaction was not verified in this update.
+
+## Inngest removal (supersedes earlier provider setup notes)
+
+Removed both Inngest packages, its API endpoint/client/functions, the combined dev runner, job-service scripts, provider credentials/configuration and related setup instructions. `npm run dev` starts Next.js directly. The running app-specific local CLI was stopped.
+
+Preserved required file operations as owner-authenticated, origin-checked app requests instead of external jobs. PDF preparation advances at most ten pages per request, checkpoints its next page, and resumes while the owner keeps the app open/returns later. Image previews and recoverable R2-first deletion remain functional code paths. Per-file database leases serialize operations across generations; failures retain useful state and support explicit retry. Limits remain 50 MiB and 2,000 pages, with the 50 MiB server-request cap enforced even if a larger environment value is supplied.
+
+Migration 0007 adds the next-page checkpoint to the existing processing-state table; this is recovery state, not an external queue/provider requirement. Maintenance/optional trash retention now run only during owner visits. R2 lifecycle remains the independent cleanup backstop while the app is closed. UI copy no longer refers to provider credentials or a local job runner.
+
+Migration 0007 was applied successfully. Production build (including TypeScript) and ESLint passed after removal. No automated tests were added or run. Live upload/deletion acceptance and browser interaction are not claimed as executed during this removal.

@@ -1,0 +1,1 @@
+ALTER TABLE "processing_jobs" ADD COLUMN "next_page" integer DEFAULT 1 NOT NULL;

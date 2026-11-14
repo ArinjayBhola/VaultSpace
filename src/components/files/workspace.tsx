@@ -1,0 +1,2338 @@
+/* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
+'use client';
+
+import { PasswordInput } from '@/components/ui/password-input';
+import { Tooltip } from '@/components/ui/tooltip';
+import { Input, Textarea } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { DatePicker, DateTimePicker } from '@/components/ui/date-picker';
+import { localDateValue, localDateBoundary } from '@/lib/time';
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Menu from '@radix-ui/react-dropdown-menu';
+import { motion } from 'motion/react';
+import {
+  Upload,
+  Plus,
+  FolderPlus,
+  Folder,
+  Grid2X2,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  FileText,
+  ImageIcon,
+  Star,
+  Download,
+  Pencil,
+  FolderInput,
+  Link2,
+  Trash2,
+  Info,
+  Layers3,
+  RotateCcw,
+  Search,
+  X,
+  SlidersHorizontal,
+  Check,
+  ShieldCheck,
+  ArrowUpRight,
+  RefreshCw,
+} from 'lucide-react';
+import { api, bytes, date } from '@/lib/client';
+import type { VaultFile, VaultFolder, FileResponse, Collection } from '@/types';
+import { Dialog } from '@/components/ui/dialog';
+import { HighlightText } from '@/components/search/highlight';
+import { CollectionPicker } from '@/components/collections/picker';
+import { CollectionFilePicker } from '@/components/collections/file-picker';
+import {
+  FilterSummary,
+  fileFilterKeys,
+} from '@/components/files/filter-summary';
+import { FileSharing } from '@/components/sharing/file-sharing';
+import { FileDetails } from '@/components/files/details';
+import { FolderDetails } from '@/components/folders/details';
+import { FolderPicker } from '@/components/folders/picker';
+import { useUploads } from '@/components/uploads/upload-provider';
+import { Overview } from '@/components/analytics/overview';
+import { Stats, AnalyticsPanels } from '@/components/analytics/dashboard';
+import { Settings } from '@/components/settings';
+import { ActivityHistory } from '@/components/activity';
+import { Shares } from '@/components/shares';
+type Action = {
+  type:
+    | 'folder-create'
+    | 'collection-create'
+    | 'rename'
+    | 'move'
+    | 'collection'
+    | 'trash'
+    | 'delete'
+    | 'details'
+    | 'share'
+    | 'revoke-shares'
+    | 'sharing-details'
+    | 'folder-rename'
+    | 'folder-move'
+    | 'folder-trash'
+    | 'collection-filter'
+    | 'folder-filter'
+    | 'collection-add'
+    | 'folder-details'
+    | 'folder-delete'
+    | 'empty-trash'
+    | 'collection-edit'
+    | 'collection-delete';
+  file?: VaultFile;
+  folder?: VaultFolder;
+  collection?: Collection;
+  ids?: string[];
+};
+const titles: Record<string, [string, string]> = {
+  '/': [
+    'Your space, at a glance',
+    'A little more organized. A lot more peace of mind.',
+  ],
+  '/files': ['My files', 'Everything worth keeping, all in one place.'],
+  '/recent': ['Recent files', 'Pick up right where you left off.'],
+  '/starred': ['Starred', 'Your favorites, always close at hand.'],
+  '/documents': [
+    'Documents',
+    'Your personal library of ideas and information.',
+  ],
+  '/collections': [
+    'Collections',
+    'Thoughtful groups. Without duplicate files.',
+  ],
+  '/trash': ['Trash', 'A second chance for the things you let go.'],
+  '/search': [
+    'Search your vault',
+    'Find a file, a thought, or something you remember.',
+  ],
+  '/analytics': ['Storage analytics', 'A clear picture of your private space.'],
+  '/settings': ['Settings', 'Make this space your own.'],
+  '/activity': ['Recent activity', 'Everything that happens in your vault.'],
+  '/shared': ['Shared links', 'Your files. Shared on your terms.'],
+};
+export function Workspace() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const params = useSearchParams();
+  const queryClient = useQueryClient();
+  const { pick, add } = useUploads();
+  const folderId = pathname.startsWith('/folders/')
+    ? pathname.split('/')[2]
+    : null;
+  const collectionId = pathname.startsWith('/collections/')
+    ? pathname.split('/')[2]
+    : null;
+  const overview = pathname === '/';
+  const trash = pathname === '/trash';
+  const collectionPage = pathname === '/collections';
+  const special = ['/settings', '/shared', '/analytics', '/activity'].includes(
+    pathname,
+  );
+  const [view, setView] = useState('grid');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [action, setAction] = useState<Action | null>(null);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [destination, setDestination] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const [filters, setFilters] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [password, setPassword] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [q, setQ] = useState(params.get('q') ?? '');
+  const anchor = useRef<number | null>(null);
+  useEffect(() => {
+    const saved = localStorage.getItem('vault-view');
+    if (saved) queueMicrotask(() => setView(saved));
+  }, []);
+  const queryFromURL = params.get('q') ?? '';
+  useEffect(() => {
+    queueMicrotask(() => setQ(queryFromURL));
+  }, [queryFromURL]);
+  useEffect(() => {
+    if (!(filters || pathname === '/search') || q === queryFromURL) return;
+    const timer = setTimeout(() => {
+      const next = new URLSearchParams(params.toString());
+      if (q) next.set('q', q);
+      else next.delete('q');
+      next.delete('page');
+      router.replace(pathname + '?' + next.toString());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [q, queryFromURL, filters, pathname, params, router]);
+  const mode = overview
+    ? 'recent'
+    : trash
+      ? 'trash'
+      : pathname === '/starred'
+        ? 'starred'
+        : pathname === '/documents'
+          ? 'documents'
+          : pathname === '/recent'
+            ? 'recent'
+            : pathname === '/files' || folderId
+              ? 'root'
+              : 'all';
+  const query = new URLSearchParams(params.toString());
+  query.set('view', mode);
+  query.set('limit', overview ? '8' : '24');
+  if (folderId) query.set('folder', folderId);
+  if (collectionId) query.set('collection', collectionId);
+  const key = query.toString();
+  const {
+    data,
+    isPending,
+    error: loadError,
+  } = useQuery({
+    queryKey: ['files', key],
+    queryFn: () => api<FileResponse>(`/api/files?${key}`),
+    enabled: !special,
+    refetchInterval: trash ? 3000 : 30000,
+  });
+  const hasActiveFilters = fileFilterKeys.some(
+    (key) =>
+      Boolean(params.get(key)) &&
+      !(key === 'type' && params.get(key) === 'all'),
+  );
+  useEffect(() => {
+    queueMicrotask(() => setSelected([]));
+    anchor.current = null;
+  }, [key]);
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        document.querySelector('[role="dialog"]') ||
+        (event.target instanceof Element &&
+          event.target.closest(
+            'input,textarea,select,[contenteditable="true"],[role="combobox"],[role="listbox"]',
+          ))
+      )
+        return;
+      if (event.key === 'Escape') setSelected([]);
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'a' &&
+        !overview &&
+        !special &&
+        !collectionPage &&
+        data?.files.length
+      ) {
+        event.preventDefault();
+        setSelected(data.files.map((file) => file.id));
+      }
+    }
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [data?.files, overview, special, collectionPage]);
+  const title = folderId
+    ? (data?.breadcrumbs.at(-1)?.name ?? 'Folder')
+    : collectionId
+      ? (data?.currentCollection?.name ?? 'Collection')
+      : (titles[pathname]?.[0] ?? 'My files');
+  const subtitle = folderId
+    ? 'A place for everything that belongs together.'
+    : collectionId
+      ? (data?.currentCollection?.description ?? 'Files, thoughtfully grouped.')
+      : titles[pathname]?.[1];
+  const showFolders = overview || mode === 'root' || trash;
+  function filter(key: string, value: string) {
+    const next = new URLSearchParams(params.toString());
+    if (value) next.set(key, value);
+    else next.delete(key);
+    next.delete('page');
+    if (key === 'collectionQuery') next.delete('collectionPage');
+    router.replace(`${pathname}?${next}`);
+    setSelected([]);
+  }
+  function changeView(next: string) {
+    setView(next);
+    localStorage.setItem('vault-view', next);
+  }
+  function openAction(next: Action) {
+    setError('');
+    setShareUrl('');
+    setPassword('');
+    setExpiry('');
+    setName(
+      next.file?.displayName ??
+        next.folder?.name ??
+        next.collection?.name ??
+        '',
+    );
+    setDescription(
+      next.file?.description ??
+        next.folder?.description ??
+        next.collection?.description ??
+        '',
+    );
+    setDestination(
+      next.type === 'collection-filter'
+        ? (params.get('collection') ?? '')
+        : next.type === 'folder-filter'
+          ? (params.get('folder') ?? '')
+          : '',
+    );
+    setAction(next);
+  }
+  async function mutate(body: unknown) {
+    const result = await api<{
+      followUp?: { delivered: boolean; message: string };
+    }>('/api/files', body);
+    if (result.followUp) setNotice(result.followUp.message);
+    window.dispatchEvent(new Event('vault-operations'));
+    await queryClient.invalidateQueries();
+    setSelected([]);
+  }
+  async function bulk(action: string, ids = selected) {
+    setError('');
+    try {
+      await mutate({ operation: 'bulk', ids, action });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action failed.');
+    }
+  }
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!action) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (action.type === 'empty-trash')
+        await mutate({ operation: 'empty-trash' });
+      if (action.type === 'folder-delete')
+        await mutate({ operation: 'folder-delete', id: action.folder?.id });
+      if (
+        action.type === 'collection-filter' ||
+        action.type === 'folder-filter'
+      ) {
+        filter(
+          action.type === 'collection-filter' ? 'collection' : 'folder',
+          destination,
+        );
+        setAction(null);
+        return;
+      }
+      const ids = action.ids ?? (action.file ? [action.file.id] : selected);
+      if (action.type === 'folder-create')
+        await mutate({
+          operation: 'folder-create',
+          name,
+          parentId: folderId,
+          description,
+        });
+      if (action.type === 'collection-create')
+        await mutate({ operation: 'collection-create', name, description });
+      if (action.type === 'rename')
+        await mutate({
+          operation: 'rename',
+          id: action.file?.id,
+          name,
+          description,
+        });
+      if (action.type === 'move')
+        await mutate({
+          operation: 'bulk',
+          ids,
+          action: 'move',
+          folderId: destination || null,
+        });
+      if (action.type === 'collection')
+        await mutate({
+          operation: 'collection-membership',
+          ids,
+          collectionId: destination,
+        });
+      if (action.type === 'trash' || action.type === 'delete')
+        await mutate({ operation: 'bulk', ids, action: action.type });
+      if (
+        action.type === 'folder-rename' ||
+        action.type === 'folder-move' ||
+        action.type === 'folder-trash'
+      )
+        await mutate({
+          operation: 'folder-action',
+          id: action.folder?.id,
+          action: action.type.split('-')[1],
+          name: action.type === 'folder-rename' ? name : undefined,
+          parentId: destination || null,
+        });
+      if (action.type === 'collection-edit')
+        await mutate({
+          operation: 'collection-update',
+          id: action.collection?.id,
+          name,
+          description,
+        });
+      if (action.type === 'collection-delete')
+        await mutate({
+          operation: 'collection-delete',
+          id: action.collection?.id,
+        });
+      if (action.type === 'revoke-shares') {
+        await api('/api/shares', {
+          action: 'revoke-file',
+          fileId: action.file?.id,
+        });
+        await queryClient.invalidateQueries();
+        setNotice(
+          'Sharing revoked. Existing share links can no longer authorize access.',
+        );
+      }
+      if (action.type === 'share') {
+        const result = await api<{ url: string }>('/api/shares', {
+          action: 'create',
+          fileId: action.file?.id,
+          expiresAt: expiry ? new Date(expiry).toISOString() : null,
+          password: password || null,
+        });
+        setShareUrl(result.url);
+        await queryClient.invalidateQueries();
+        return;
+      }
+      setAction(null);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'This action could not be completed.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  function select(
+    file: VaultFile,
+    index: number,
+    event?: { shiftKey: boolean },
+  ) {
+    if (event?.shiftKey && anchor.current !== null && data) {
+      const range = data.files
+        .slice(
+          Math.min(anchor.current, index),
+          Math.max(anchor.current, index) + 1,
+        )
+        .map((f) => f.id);
+      setSelected((prev) => [...new Set([...prev, ...range])]);
+    } else {
+      setSelected((prev) =>
+        prev.includes(file.id)
+          ? prev.filter((id) => id !== file.id)
+          : [...prev, file.id],
+      );
+      anchor.current = index;
+    }
+  }
+  function open(file: VaultFile) {
+    if (file.mimeType === 'application/pdf')
+      router.push(
+        `/documents/${file.id}${file.pageReference ? `?page=${file.pageReference}` : ''}`,
+      );
+    else openAction({ type: 'details', file });
+  }
+  function fileMenu(file: VaultFile) {
+    return (
+      <Menu.Root>
+        <Tooltip label={`Actions for ${file.displayName}`}>
+          <Menu.Trigger asChild>
+            <button
+              className="icon-btn"
+              aria-label={`Actions for ${file.displayName}`}
+            >
+              <MoreHorizontal size={17} />
+            </button>
+          </Menu.Trigger>
+        </Tooltip>
+        <Menu.Portal>
+          <Menu.Content className="menu-content" align="end" sideOffset={5}>
+            {trash ? (
+              <>
+                <Menu.Item
+                  className="menu-item"
+                  disabled={file.processingStatus === 'deleting'}
+                  onSelect={() => void bulk('restore', [file.id])}
+                >
+                  <RotateCcw size={14} />
+                  Restore
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item danger"
+                  onSelect={() => openAction({ type: 'delete', file })}
+                >
+                  <Trash2 size={14} />
+                  Delete permanently
+                </Menu.Item>
+              </>
+            ) : (
+              <>
+                {Boolean(file.activeShareCount) && (
+                  <Menu.Item
+                    className="menu-item danger"
+                    onSelect={() => openAction({ type: 'revoke-shares', file })}
+                  >
+                    <Link2 size={14} />
+                    Revoke sharing
+                  </Menu.Item>
+                )}
+                <Menu.Item className="menu-item" onSelect={() => open(file)}>
+                  <ArrowUpRight size={14} />
+                  Open file
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => openAction({ type: 'rename', file })}
+                >
+                  <Pencil size={14} />
+                  Rename & description
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => openAction({ type: 'move', file })}
+                >
+                  <FolderInput size={14} />
+                  Move to folder
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() =>
+                    void bulk(file.starredAt ? 'unstar' : 'star', [file.id])
+                  }
+                >
+                  <Star size={14} />
+                  {file.starredAt ? 'Remove star' : 'Add to starred'}
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => openAction({ type: 'collection', file })}
+                >
+                  <Layers3 size={14} />
+                  Add to collection
+                </Menu.Item>
+                {collectionId && (
+                  <Menu.Item
+                    className="menu-item"
+                    onSelect={() =>
+                      void mutate({
+                        operation: 'collection-membership',
+                        collectionId,
+                        ids: [file.id],
+                        remove: true,
+                      }).catch((e) => setError(e.message))
+                    }
+                  >
+                    <X size={14} />
+                    Remove from collection
+                  </Menu.Item>
+                )}
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => openAction({ type: 'share', file })}
+                >
+                  <Link2 size={14} />
+                  Share file
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => openAction({ type: 'sharing-details', file })}
+                >
+                  <Info size={14} />
+                  Sharing details
+                </Menu.Item>
+                <Menu.Item asChild className="menu-item">
+                  <a href={`/api/files/${file.id}/download`}>
+                    <Download size={14} />
+                    Download
+                  </a>
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => openAction({ type: 'details', file })}
+                >
+                  <Info size={14} />
+                  File details
+                </Menu.Item>
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => void bulk('reprocess', [file.id])}
+                >
+                  <RefreshCw size={14} />
+                  Reprocess file
+                </Menu.Item>
+                <Menu.Separator
+                  style={{
+                    height: 1,
+                    background: 'var(--border)',
+                    margin: '4px 0',
+                  }}
+                />
+                <Menu.Item
+                  className="menu-item danger"
+                  onSelect={() => openAction({ type: 'trash', file })}
+                >
+                  <Trash2 size={14} />
+                  Move to trash
+                </Menu.Item>
+              </>
+            )}
+          </Menu.Content>
+        </Menu.Portal>
+      </Menu.Root>
+    );
+  }
+  const dialogTitles: Record<Action['type'], string> = {
+    'collection-filter': 'Search a collection',
+    'folder-filter': 'Search a folder',
+    'folder-create': 'Create a folder',
+    'collection-create': 'Create a collection',
+    rename: 'Edit file',
+    move: 'Move files',
+    collection: 'Add to collection',
+    trash: 'Move to trash?',
+    delete: 'Permanently delete?',
+    details: 'File details',
+    share: 'Share a file',
+    'revoke-shares': 'Revoke sharing?',
+    'sharing-details': 'Sharing details',
+    'folder-rename': 'Rename folder',
+    'folder-move': 'Move folder',
+    'folder-trash': 'Move folder to trash?',
+    'folder-delete': 'Permanently delete folder?',
+    'collection-add': 'Add existing files',
+    'folder-details': 'Folder details',
+    'empty-trash': 'Empty the trash?',
+    'collection-edit': 'Edit collection',
+    'collection-delete': 'Delete collection?',
+  };
+  return (
+    <div
+      className="workspace-page"
+      onDragOver={(e) => {
+        if (
+          Array.from(e.dataTransfer.types).includes('Files') &&
+          !special &&
+          !collectionId &&
+          !collectionPage
+        ) {
+          e.preventDefault();
+          setDrag(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (
+          !e.currentTarget.contains(
+            e.relatedTarget instanceof Node ? e.relatedTarget : null,
+          )
+        )
+          setDrag(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDrag(false);
+        if (!special && !collectionId && !collectionPage)
+          add(Array.from(e.dataTransfer.files), folderId);
+      }}
+    >
+      {drag && (
+        <div className="workspace-drag-overlay" role="status">
+          <div>
+            <Upload size={34} />
+            <h2>Drop to add to your vault</h2>
+            <p>
+              {folderId
+                ? `Upload into ${data?.breadcrumbs.at(-1)?.name || 'this folder'}`
+                : 'Images and PDFs, stored privately'}
+            </p>
+          </div>
+        </div>
+      )}
+      {!overview && (
+        <div className="page-heading">
+          <div>
+            {folderId && (
+              <div
+                className="muted"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                  marginBottom: 13,
+                }}
+              >
+                <Link href="/files">My files</Link>
+                {data?.breadcrumbs.map((c) => (
+                  <span
+                    key={c.id}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                    }}
+                  >
+                    <ChevronRight size={12} />
+                    <Link href={`/folders/${c.id}`}>{c.name}</Link>
+                  </span>
+                ))}
+              </div>
+            )}
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+          {trash && (
+            <button
+              className="btn danger"
+              disabled={isPending || (!data?.count && !data?.folderCount)}
+              onClick={() => openAction({ type: 'empty-trash' })}
+            >
+              <Trash2 size={15} />
+              Empty trash
+            </button>
+          )}
+          {!special && !trash && (
+            <div className="page-actions">
+              <button
+                className="btn"
+                onClick={() =>
+                  openAction({
+                    type: collectionId
+                      ? 'collection-add'
+                      : collectionPage
+                        ? 'collection-create'
+                        : 'folder-create',
+                  })
+                }
+              >
+                {collectionPage || collectionId ? (
+                  <Plus size={16} />
+                ) : (
+                  <FolderPlus size={16} />
+                )}
+                <span>
+                  {collectionId
+                    ? 'Add files'
+                    : collectionPage
+                      ? 'New collection'
+                      : 'New folder'}
+                </span>
+              </button>
+              {collectionId && data?.currentCollection && (
+                <button
+                  className="btn"
+                  onClick={() =>
+                    openAction({
+                      type: 'collection-edit',
+                      collection: data.currentCollection ?? undefined,
+                    })
+                  }
+                >
+                  <Pencil size={15} />
+                  Edit collection
+                </button>
+              )}
+              {!collectionPage && !collectionId && (
+                <button className="btn primary" onClick={() => pick(folderId)}>
+                  <Upload size={16} />
+                  Upload files
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {pathname === '/activity' ? (
+        <ActivityHistory />
+      ) : pathname === '/analytics' ? (
+        <>
+          <Stats />
+          <AnalyticsPanels full />
+        </>
+      ) : pathname === '/settings' ? (
+        <Settings />
+      ) : pathname === '/shared' ? (
+        <Shares />
+      ) : (
+        <>
+          {overview && (
+            <>
+              <Overview
+                onUpload={() => pick(null)}
+                onCreateFolder={() => openAction({ type: 'folder-create' })}
+              />
+              <Stats />
+            </>
+          )}
+          {notice && (
+            <div className="notice" role="status">
+              {notice}
+              <Tooltip label="Dismiss notification">
+                <button
+                  className="icon-btn"
+                  aria-label="Dismiss notification"
+                  onClick={() => setNotice('')}
+                >
+                  <X size={14} />
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          {trash && data?.cleanup?.failed && (
+            <div className="notice error" role="alert">
+              Storage cleanup failed. Check R2 Object Read &amp; Write
+              permissions in your storage configuration, then choose Delete
+              permanently again to retry.
+            </div>
+          )}
+          {trash &&
+            data?.files.some((file) => file.processingStatus === 'deleting') &&
+            data.cleanup?.available && (
+              <div className="notice" role="status">
+                <RefreshCw size={16} className="vault-spinner" /> Permanent
+                deletion is in progress. This view updates automatically.
+              </div>
+            )}
+
+          {loadError && (
+            <div className="notice error" role="alert">
+              {loadError.message}
+              <button
+                className="btn"
+                onClick={() => void queryClient.invalidateQueries()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {error && !action && (
+            <div className="notice error" role="alert">
+              {error}
+              <Tooltip label="Dismiss error">
+                <button
+                  className="icon-btn"
+                  onClick={() => setError('')}
+                  aria-label="Dismiss error"
+                >
+                  <X size={14} />
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          {collectionPage ? (
+            <>
+              <form
+                className="toolbar"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  filter(
+                    'collectionQuery',
+                    String(
+                      new FormData(e.currentTarget).get('collectionSearch') ??
+                        '',
+                    ),
+                  );
+                }}
+              >
+                <Input
+                  name="collectionSearch"
+                  aria-label="Find collections"
+                  placeholder="Find a collection?"
+                  maxLength={200}
+                  defaultValue={params.get('collectionQuery') ?? ''}
+                />
+                <button className="btn">
+                  <Search size={14} />
+                  Search collections
+                </button>
+              </form>
+              <div className="folder-grid">
+                {data?.collections.map((c) => (
+                  <div className="card" key={c.id} style={{ padding: 22 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Layers3 size={26} color="#8b5cf6" />
+                      <Menu.Root>
+                        <Tooltip label={`Actions for ${c.name}`}>
+                          <Menu.Trigger asChild>
+                            <button
+                              className="icon-btn"
+                              aria-label={`Actions for ${c.name}`}
+                            >
+                              <MoreHorizontal size={17} />
+                            </button>
+                          </Menu.Trigger>
+                        </Tooltip>
+                        <Menu.Portal>
+                          <Menu.Content className="menu-content">
+                            <Menu.Item
+                              className="menu-item"
+                              onSelect={() =>
+                                openAction({
+                                  type: 'collection-edit',
+                                  collection: c,
+                                })
+                              }
+                            >
+                              Edit collection
+                            </Menu.Item>
+                            <Menu.Item
+                              className="menu-item danger"
+                              onSelect={() =>
+                                openAction({
+                                  type: 'collection-delete',
+                                  collection: c,
+                                })
+                              }
+                            >
+                              Delete collection
+                            </Menu.Item>
+                          </Menu.Content>
+                        </Menu.Portal>
+                      </Menu.Root>
+                    </div>
+                    <Link href={`/collections/${c.id}`}>
+                      <h2 style={{ margin: '18px 0 7px' }}>{c.name}</h2>
+                      <p
+                        className="muted"
+                        style={{
+                          fontSize:
+                            'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
+                        }}
+                      >
+                        {c.description ||
+                          'A collection of things worth keeping.'}
+                      </p>
+                      <span className="badge">{c.count} files</span>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+              {data &&
+                (data.collectionCount > 100 ||
+                  Number(params.get('collectionPage') ?? 1) > 1) && (
+                  <div className="pagination">
+                    <span>{data.collectionCount} collections</span>
+                    <div>
+                      <button
+                        className="btn"
+                        disabled={
+                          Number(params.get('collectionPage') ?? 1) <= 1
+                        }
+                        onClick={() =>
+                          filter(
+                            'collectionPage',
+                            String(
+                              Number(params.get('collectionPage') ?? 1) - 1,
+                            ),
+                          )
+                        }
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="btn"
+                        disabled={
+                          Number(params.get('collectionPage') ?? 1) * 100 >=
+                          data.collectionCount
+                        }
+                        onClick={() =>
+                          filter(
+                            'collectionPage',
+                            String(
+                              Number(params.get('collectionPage') ?? 1) + 1,
+                            ),
+                          )
+                        }
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              {!isPending && !data?.collections.length && (
+                <div className="card empty">
+                  <Layers3 size={38} />
+                  <h3>A little organization goes a long way</h3>
+                  <p>
+                    Create collections to bring related files together.
+                    <br />
+                    Your originals stay exactly where they are.
+                  </p>
+                  <button
+                    className="btn primary"
+                    onClick={() => openAction({ type: 'collection-create' })}
+                  >
+                    <Plus size={15} />
+                    Create collection
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {showFolders && (
+                <>
+                  <div className="section-heading">
+                    <h2>{trash ? 'Deleted folders' : 'Folders'}</h2>
+                    {overview && (
+                      <Link
+                        href="/files"
+                        className="link"
+                        style={{
+                          display: 'flex',
+                          gap: 5,
+                          alignItems: 'center',
+                        }}
+                      >
+                        View all
+                        <ChevronRight size={13} />
+                      </Link>
+                    )}
+                  </div>
+                  {data?.folders.length ? (
+                    <div className="folder-grid">
+                      {data.folders.map((f) => (
+                        <div className="card folder-card" key={f.id}>
+                          <Folder
+                            size={30}
+                            color="#e5ad43"
+                            fill="#fce7b5"
+                            strokeWidth={1.5}
+                          />
+                          <Link
+                            href={`/folders/${f.id}`}
+                            style={{ minWidth: 0, flex: 1 }}
+                          >
+                            <div className="file-name">{f.name}</div>
+                            <div className="file-subtitle">
+                              {trash
+                                ? f.purgeRequestedAt
+                                  ? 'Permanent cleanup queued'
+                                  : date(f.deletedAt)
+                                : 'Folder'}
+                            </div>
+                          </Link>
+                          <Menu.Root>
+                            <Tooltip label={`Actions for folder ${f.name}`}>
+                              <Menu.Trigger asChild>
+                                <button
+                                  className="icon-btn"
+                                  aria-label={`Actions for folder ${f.name}`}
+                                >
+                                  <MoreHorizontal size={15} />
+                                </button>
+                              </Menu.Trigger>
+                            </Tooltip>
+                            <Menu.Portal>
+                              <Menu.Content className="menu-content">
+                                {trash ? (
+                                  <>
+                                    <Menu.Item
+                                      className="menu-item"
+                                      onSelect={() =>
+                                        void mutate({
+                                          operation: 'folder-action',
+                                          id: f.id,
+                                          action: 'restore',
+                                        }).catch((e) => setError(e.message))
+                                      }
+                                    >
+                                      Restore folder
+                                    </Menu.Item>
+                                    <Menu.Item
+                                      disabled={Boolean(f.purgeRequestedAt)}
+                                      className="menu-item"
+                                      onSelect={() =>
+                                        openAction({
+                                          type: 'folder-rename',
+                                          folder: f,
+                                        })
+                                      }
+                                    >
+                                      Rename before restoring
+                                    </Menu.Item>
+                                    <Menu.Item
+                                      className="menu-item danger"
+                                      onSelect={() =>
+                                        openAction({
+                                          type: 'folder-delete',
+                                          folder: f,
+                                        })
+                                      }
+                                    >
+                                      Delete permanently
+                                    </Menu.Item>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Menu.Item
+                                      className="menu-item"
+                                      onSelect={() =>
+                                        openAction({
+                                          type: 'folder-rename',
+                                          folder: f,
+                                        })
+                                      }
+                                    >
+                                      Rename
+                                    </Menu.Item>
+                                    <Menu.Item
+                                      className="menu-item"
+                                      onSelect={() =>
+                                        openAction({
+                                          type: 'folder-details',
+                                          folder: f,
+                                        })
+                                      }
+                                    >
+                                      View details
+                                    </Menu.Item>
+                                    <Menu.Item
+                                      className="menu-item"
+                                      onSelect={() =>
+                                        openAction({
+                                          type: 'folder-move',
+                                          folder: f,
+                                        })
+                                      }
+                                    >
+                                      Move
+                                    </Menu.Item>
+                                    <Menu.Item
+                                      className="menu-item danger"
+                                      onSelect={() =>
+                                        openAction({
+                                          type: 'folder-trash',
+                                          folder: f,
+                                        })
+                                      }
+                                    >
+                                      Move to trash
+                                    </Menu.Item>
+                                  </>
+                                )}
+                              </Menu.Content>
+                            </Menu.Portal>
+                          </Menu.Root>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      className="card"
+                      style={{
+                        padding: '20px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 14,
+                      }}
+                    >
+                      <Folder size={28} color="#c5a66a" />
+                      <div>
+                        <div
+                          style={{
+                            fontSize:
+                              'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
+                            fontWeight: 550,
+                          }}
+                        >
+                          {trash
+                            ? 'No deleted folders'
+                            : 'Room for a little order'}
+                        </div>
+                        <div
+                          className="muted"
+                          style={{
+                            fontSize:
+                              'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                            marginTop: 5,
+                          }}
+                        >
+                          {trash
+                            ? 'Deleted folders will appear here.'
+                            : 'Create your first folder to give your files a home.'}
+                        </div>
+                      </div>
+                      {!trash && (
+                        <Tooltip label="Create your first folder">
+                          <button
+                            className="icon-btn"
+                            style={{ marginLeft: 'auto' }}
+                            aria-label="Create your first folder"
+                            onClick={() =>
+                              openAction({ type: 'folder-create' })
+                            }
+                          >
+                            <Plus size={17} />
+                          </button>
+                        </Tooltip>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+              {showFolders && (data?.folderCount ?? 0) > 100 && (
+                <div className="pagination">
+                  <span>{data?.folderCount} folders</span>
+                  <div>
+                    <button
+                      className="btn"
+                      disabled={Number(params.get('folderPage') ?? 1) <= 1}
+                      onClick={() =>
+                        filter(
+                          'folderPage',
+                          String(Number(params.get('folderPage') ?? 1) - 1),
+                        )
+                      }
+                    >
+                      Previous folders
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={
+                        Number(params.get('folderPage') ?? 1) * 100 >=
+                        (data?.folderCount ?? 0)
+                      }
+                      onClick={() =>
+                        filter(
+                          'folderPage',
+                          String(Number(params.get('folderPage') ?? 1) + 1),
+                        )
+                      }
+                    >
+                      More folders
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="section-heading">
+                <h2>
+                  {overview
+                    ? 'Recent files'
+                    : trash
+                      ? 'Deleted files'
+                      : collectionId
+                        ? 'Collection files'
+                        : 'Your files'}{' '}
+                  {data && (
+                    <span
+                      className="muted"
+                      style={{
+                        fontSize:
+                          'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                        fontWeight: 400,
+                        marginLeft: 5,
+                      }}
+                    >
+                      {data.count} {data.count === 1 ? 'file' : 'files'}
+                    </span>
+                  )}
+                </h2>
+                {overview ? (
+                  <Link className="link" href="/recent">
+                    View all →
+                  </Link>
+                ) : (
+                  <button
+                    className={`btn filter-toggle ${filters ? 'is-active' : ''}`}
+                    aria-expanded={filters}
+                    aria-controls="file-filters"
+                    style={{
+                      padding: '7px 10px',
+                      fontSize:
+                        'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                    }}
+                    onClick={() => setFilters(!filters)}
+                  >
+                    <SlidersHorizontal size={13} />
+                    Filters
+                  </button>
+                )}
+              </div>
+              {!overview && (
+                <div className="toolbar file-toolbar">
+                  <div
+                    className="tabs"
+                    role="group"
+                    aria-label="File type filter"
+                  >
+                    {[
+                      ['all', 'All files'],
+                      ['images', 'Images'],
+                      ['pdf', 'PDFs'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        className={`tab ${(params.get('type') ?? 'all') === value ? 'active' : ''}`}
+                        aria-pressed={(params.get('type') ?? 'all') === value}
+                        onClick={() =>
+                          filter('type', value === 'all' ? '' : value)
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="file-toolbar-actions">
+                    <Select
+                      aria-label="Sort files"
+                      value={
+                        params.get('sort') ??
+                        (params.get('q') ? 'relevance' : 'created')
+                      }
+                      onChange={(e) => filter('sort', e.target.value)}
+                      style={{
+                        fontSize:
+                          'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                        padding: '8px 10px',
+                      }}
+                    >
+                      {params.get('q') && (
+                        <option value="relevance">Relevance</option>
+                      )}
+                      <option value="created">Upload date</option>
+                      <option value="name">Name</option>
+                      <option value="modified">Modified date</option>
+                      <option value="size">File size</option>
+                      <option value="type">File type</option>
+                    </Select>
+                    <div
+                      style={{
+                        display: 'flex',
+                        padding: 3,
+                        border: '1px solid var(--border)',
+                        borderRadius: 7,
+                      }}
+                    >
+                      <Tooltip label="Grid view">
+                        <button
+                          className="icon-btn"
+                          aria-label="Grid view"
+                          aria-pressed={view === 'grid'}
+                          style={{
+                            width: 29,
+                            height: 27,
+                            background:
+                              view === 'grid' ? 'var(--soft)' : undefined,
+                            color: view === 'grid' ? 'var(--blue)' : undefined,
+                          }}
+                          onClick={() => changeView('grid')}
+                        >
+                          <Grid2X2 size={15} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label="List view">
+                        <button
+                          className="icon-btn"
+                          aria-label="List view"
+                          aria-pressed={view === 'list'}
+                          style={{
+                            width: 29,
+                            height: 27,
+                            background:
+                              view === 'list' ? 'var(--soft)' : undefined,
+                            color: view === 'list' ? 'var(--blue)' : undefined,
+                          }}
+                          onClick={() => changeView('list')}
+                        >
+                          <List size={16} />
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(filters || pathname === '/search') && (
+                <form
+                  id="file-filters"
+                  className="advanced-filters card"
+                  style={{
+                    padding: 17,
+                    marginBottom: 17,
+                    display: 'flex',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    alignItems: 'end',
+                  }}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    filter('q', q);
+                  }}
+                >
+                  <label
+                    className="form-field"
+                    style={{ margin: 0, flex: 1, minWidth: 180 }}
+                  >
+                    Search
+                    <Input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Names, descriptions, PDF content…"
+                    />
+                  </label>
+                  <label className="form-field" style={{ margin: 0 }}>
+                    Min size (MB)
+                    <Input
+                      placeholder="0"
+                      style={{ width: 105 }}
+                      type="number"
+                      min="0"
+                      defaultValue={
+                        params.get('minSize')
+                          ? Number(params.get('minSize')) / 1048576
+                          : ''
+                      }
+                      onBlur={(e) =>
+                        filter(
+                          'minSize',
+                          e.target.value
+                            ? String(Number(e.target.value) * 1048576)
+                            : '',
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="form-field" style={{ margin: 0 }}>
+                    Uploaded after
+                    <DatePicker
+                      aria-label="Uploaded after"
+                      value={
+                        params.get('after')
+                          ? localDateValue(params.get('after') ?? '')
+                          : ''
+                      }
+                      onChange={(e) =>
+                        filter(
+                          'after',
+                          e.target.value
+                            ? localDateBoundary(e.target.value, false)
+                            : '',
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="form-field" style={{ margin: 0 }}>
+                    Max size (MB)
+                    <Input
+                      placeholder="e.g. 50"
+                      style={{ width: 105 }}
+                      type="number"
+                      min="0"
+                      defaultValue={
+                        params.get('maxSize')
+                          ? Number(params.get('maxSize')) / 1048576
+                          : ''
+                      }
+                      onBlur={(e) =>
+                        filter(
+                          'maxSize',
+                          e.target.value
+                            ? String(Number(e.target.value) * 1048576)
+                            : '',
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="form-field" style={{ margin: 0 }}>
+                    Uploaded before
+                    <DatePicker
+                      aria-label="Uploaded before"
+                      value={
+                        params.get('before')
+                          ? localDateValue(params.get('before') ?? '')
+                          : ''
+                      }
+                      onChange={(e) =>
+                        filter(
+                          'before',
+                          e.target.value
+                            ? localDateBoundary(e.target.value, true)
+                            : '',
+                        )
+                      }
+                    />
+                  </label>
+                  {!collectionId && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => openAction({ type: 'collection-filter' })}
+                    >
+                      <Layers3 size={14} />
+                      {data?.currentCollection?.name ?? 'All collections'}
+                    </button>
+                  )}
+                  {!folderId && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => openAction({ type: 'folder-filter' })}
+                    >
+                      <Folder size={14} />
+                      {data?.breadcrumbs.at(-1)?.name ?? 'Choose folder'}
+                    </button>
+                  )}
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      fontSize:
+                        'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
+                      paddingBottom: 11,
+                    }}
+                  >
+                    <Input
+                      type="checkbox"
+                      checked={params.get('starred') === 'true'}
+                      onChange={(e) =>
+                        filter('starred', e.target.checked ? 'true' : '')
+                      }
+                    />
+                    Starred only
+                  </label>
+                  <label className="form-field" style={{ margin: 0 }}>
+                    Processing
+                    <Select
+                      value={params.get('status') ?? ''}
+                      onChange={(e) => filter('status', e.target.value)}
+                    >
+                      <option value="">All statuses</option>
+                      {[
+                        'pending',
+                        'processing',
+                        'ready',
+                        'failed',
+                        'ocr_required',
+                      ].map((s) => (
+                        <option key={s} value={s}>
+                          {s.replaceAll('_', ' ')}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+
+                  <button className="btn primary">
+                    <Search size={15} />
+                    Search
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      setQ('');
+                      router.replace(pathname);
+                    }}
+                  >
+                    Clear
+                  </button>
+                </form>
+              )}
+
+              {!overview && (
+                <FilterSummary
+                  collectionName={data?.currentCollection?.name}
+                  folderName={data?.breadcrumbs.at(-1)?.name}
+                />
+              )}
+              {selected.length > 0 && (
+                <div
+                  className="card toolbar selection-toolbar"
+                  role="region"
+                  aria-label="Selected file actions"
+                  style={{ padding: '10px 15px', background: 'var(--soft)' }}
+                >
+                  <strong
+                    aria-live="polite"
+                    style={{
+                      fontSize:
+                        'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
+                    }}
+                  >
+                    {selected.length} selected
+                  </strong>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {trash ? (
+                      <>
+                        <button
+                          className="btn"
+                          onClick={() => void bulk('restore')}
+                        >
+                          <RotateCcw size={14} />
+                          Restore
+                        </button>
+                        <button
+                          className="btn danger"
+                          onClick={() =>
+                            openAction({ type: 'delete', ids: selected })
+                          }
+                        >
+                          <Trash2 size={14} />
+                          Delete forever
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Tooltip label="Star selected">
+                          <button
+                            className="icon-btn"
+                            aria-label="Star selected"
+                            onClick={() => void bulk('star')}
+                          >
+                            <Star size={16} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Download selected">
+                          <button
+                            className="icon-btn"
+                            aria-label="Download selected"
+                            onClick={() => {
+                              if (selected.length > 10) {
+                                setError(
+                                  'Download up to 10 files at a time. Your browser may ask to allow multiple downloads.',
+                                );
+                                return;
+                              }
+                              for (const id of selected) {
+                                const link = document.createElement('a');
+                                link.href = '/api/files/' + id + '/download';
+                                link.download = '';
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                              }
+                            }}
+                          >
+                            <Download size={16} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Move selected">
+                          <button
+                            className="icon-btn"
+                            aria-label="Move selected"
+                            onClick={() =>
+                              openAction({ type: 'move', ids: selected })
+                            }
+                          >
+                            <FolderInput size={17} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Add selected to collection">
+                          <button
+                            className="icon-btn"
+                            aria-label="Add selected to collection"
+                            onClick={() =>
+                              openAction({ type: 'collection', ids: selected })
+                            }
+                          >
+                            <Layers3 size={16} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Trash selected">
+                          <button
+                            className="icon-btn danger"
+                            aria-label="Trash selected"
+                            onClick={() =>
+                              openAction({ type: 'trash', ids: selected })
+                            }
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </Tooltip>
+                      </>
+                    )}
+                    <Tooltip label="Clear selection">
+                      <button
+                        className="icon-btn"
+                        aria-label="Clear selection"
+                        onClick={() => setSelected([])}
+                      >
+                        <X size={16} />
+                      </button>
+                    </Tooltip>
+                  </div>
+                </div>
+              )}
+              {!overview && data?.files.length ? (
+                <div className="file-selection-row">
+                  <label>
+                    <Input
+                      type="checkbox"
+                      checked={data.files.every((file) =>
+                        selected.includes(file.id),
+                      )}
+                      ref={(node) => {
+                        if (node)
+                          node.indeterminate =
+                            selected.length > 0 &&
+                            !data.files.every((file) =>
+                              selected.includes(file.id),
+                            );
+                      }}
+                      onChange={(event) =>
+                        setSelected(
+                          event.target.checked
+                            ? data.files.map((file) => file.id)
+                            : [],
+                        )
+                      }
+                    />
+                    Select this page
+                  </label>
+                  <span>
+                    {(data.page - 1) * data.limit + 1}-
+                    {Math.min(data.page * data.limit, data.count)} of{' '}
+                    {data.count} files
+                  </span>
+                  <span className="selection-keyboard-hint">
+                    Ctrl/Cmd+A to select | Esc to clear
+                  </span>
+                </div>
+              ) : null}
+              {isPending ? (
+                <div className="file-grid">
+                  {[1, 2, 3, 4].map((n) => (
+                    <div className="skeleton" style={{ height: 225 }} key={n} />
+                  ))}
+                </div>
+              ) : data?.files.length ? (
+                view === 'grid' ? (
+                  <div className="file-grid">
+                    {data.files.map((f, i) => (
+                      <motion.article
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className={`card file-card ${selected.includes(f.id) ? 'selected' : ''}`}
+                        key={f.id}
+                      >
+                        <Input
+                          type="checkbox"
+                          className="file-check"
+                          aria-label={`Select ${f.displayName}`}
+                          checked={selected.includes(f.id)}
+                          onChange={(e) =>
+                            select(
+                              f,
+                              i,
+                              e.nativeEvent instanceof MouseEvent
+                                ? e.nativeEvent
+                                : undefined,
+                            )
+                          }
+                        />
+                        <Tooltip label={`Open ${f.displayName}`}>
+                          <button
+                            className="file-preview"
+                            style={{ border: 0, width: '100%', padding: 0 }}
+                            onClick={(e) => {
+                              if (e.metaKey || e.ctrlKey || e.shiftKey)
+                                select(f, i, e);
+                              else if (!trash) open(f);
+                            }}
+                            aria-label={`Open ${f.displayName}`}
+                          >
+                            {f.hasThumbnail && !trash ? (
+                              <img
+                                loading="lazy"
+                                alt={f.displayName}
+                                src={`/api/files/${f.id}/content?thumbnail=1`}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  color:
+                                    f.mimeType === 'application/pdf'
+                                      ? '#e38579'
+                                      : '#7aa4d5',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                }}
+                              >
+                                {f.mimeType === 'application/pdf' ? (
+                                  <FileText size={49} strokeWidth={1} />
+                                ) : (
+                                  <ImageIcon size={49} strokeWidth={1} />
+                                )}
+                                <span
+                                  style={{
+                                    fontSize:
+                                      'max(9px, calc(11px * var(--vault-font-scale, 1)))',
+                                    fontWeight: 700,
+                                    letterSpacing: 2,
+                                  }}
+                                >
+                                  {f.mimeType === 'application/pdf'
+                                    ? trash && f.processingStatus === 'deleting'
+                                      ? 'DELETING'
+                                      : 'PDF DOCUMENT'
+                                    : f.processingStatus === 'pending'
+                                      ? 'PREVIEW PENDING'
+                                      : 'IMAGE'}
+                                </span>
+                              </div>
+                            )}
+                          </button>
+                        </Tooltip>
+                        {!trash && (
+                          <div className="file-quick-actions">
+                            <Tooltip
+                              label={f.starredAt ? 'Remove star' : 'Star file'}
+                            >
+                              <button
+                                type="button"
+                                className={`icon-btn quick-star ${f.starredAt ? 'is-starred' : ''}`}
+                                aria-label={
+                                  f.starredAt ? 'Remove star' : 'Star file'
+                                }
+                                onClick={() =>
+                                  void bulk(f.starredAt ? 'unstar' : 'star', [
+                                    f.id,
+                                  ])
+                                }
+                              >
+                                <Star
+                                  size={15}
+                                  fill={f.starredAt ? 'currentColor' : 'none'}
+                                />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="File details">
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                aria-label="File details"
+                                onClick={() =>
+                                  openAction({ type: 'details', file: f })
+                                }
+                              >
+                                <Info size={15} />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        )}
+                        {Boolean(f.activeShareCount) && !trash && (
+                          <Tooltip label="Manage shared access">
+                            <button
+                              type="button"
+                              className="file-shared-indicator"
+                              aria-label="Manage shared access"
+                              onClick={() =>
+                                openAction({ type: 'sharing-details', file: f })
+                              }
+                            >
+                              <Link2 size={11} />
+                              Shared
+                            </button>
+                          </Tooltip>
+                        )}
+                        <div className="file-meta">
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 7,
+                              alignItems: 'center',
+                            }}
+                          >
+                            {f.mimeType === 'application/pdf' ? (
+                              <FileText size={14} color="#e38579" />
+                            ) : (
+                              <ImageIcon size={14} color="#7aa4d5" />
+                            )}
+                            <span
+                              className="file-name"
+                              style={{ flex: 1 }}
+                              title={f.displayName}
+                            >
+                              <HighlightText
+                                text={f.displayName}
+                                query={params.get('q') ?? ''}
+                              />
+                            </span>
+                            {f.starredAt && (
+                              <Star size={12} color="#eab308" fill="#eab308" />
+                            )}
+                            {fileMenu(f)}
+                          </div>
+                          <div className="file-subtitle">
+                            {bytes(f.sizeBytes)}
+                            <span style={{ margin: '0 6px' }}>·</span>
+                            {date(trash ? f.deletedAt : f.createdAt)}
+                          </div>
+                          {params.get('q') && f.excerpt && (
+                            <p
+                              className="muted"
+                              style={{
+                                fontSize:
+                                  'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                                margin: '10px 0 0',
+                                lineHeight: 1.6,
+                              }}
+                            >
+                              <HighlightText
+                                text={f.excerpt.slice(0, 160)}
+                                query={params.get('q') ?? ''}
+                              />
+                              {f.pageReference
+                                ? ` · Page ${f.pageReference}`
+                                : ''}
+                            </p>
+                          )}
+                        </div>
+                      </motion.article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="card table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th aria-label="Selection" />
+                          <th>Name</th>
+                          <th>Size</th>
+                          <th>{trash ? 'Deleted' : 'Uploaded'}</th>
+                          <th>Status</th>
+                          <th aria-label="Actions" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.files.map((f, i) => (
+                          <tr key={f.id}>
+                            <td>
+                              <Input
+                                type="checkbox"
+                                aria-label={`Select ${f.displayName}`}
+                                checked={selected.includes(f.id)}
+                                onChange={() => select(f, i)}
+                              />
+                            </td>
+                            <td>
+                              <button
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 12,
+                                  border: 0,
+                                  background: 'transparent',
+                                  textAlign: 'left',
+                                }}
+                                onClick={() => !trash && open(f)}
+                              >
+                                {f.mimeType === 'application/pdf' ? (
+                                  <FileText size={21} color="#e38579" />
+                                ) : (
+                                  <ImageIcon size={21} color="#7aa4d5" />
+                                )}
+                                <span>
+                                  <HighlightText
+                                    text={f.displayName}
+                                    query={params.get('q') ?? ''}
+                                  />
+                                  {f.starredAt && (
+                                    <Star
+                                      size={11}
+                                      fill="#eab308"
+                                      color="#eab308"
+                                      style={{
+                                        display: 'inline',
+                                        marginLeft: 7,
+                                      }}
+                                    />
+                                  )}
+                                </span>
+                              </button>
+                            </td>
+                            <td className="muted">{bytes(f.sizeBytes)}</td>
+                            <td className="muted">
+                              {date(trash ? f.deletedAt : f.createdAt)}
+                            </td>
+                            <td>
+                              <span className="badge">
+                                {f.processingStatus.replaceAll('_', ' ')}
+                              </span>
+                            </td>
+                            <td>{fileMenu(f)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                !loadError && (
+                  <div className="card empty">
+                    <div
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 17,
+                        background: 'var(--soft)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 19px',
+                      }}
+                    >
+                      {trash ? (
+                        <Trash2 size={29} />
+                      ) : params.get('q') ? (
+                        <Search size={29} />
+                      ) : (
+                        <FilesEmpty />
+                      )}
+                    </div>
+                    <h3>
+                      {trash
+                        ? 'Nothing in the trash'
+                        : hasActiveFilters
+                          ? 'No files match your filters'
+                          : pathname === '/starred'
+                            ? 'Keep your favorites close'
+                            : 'Your next favorite thing belongs here'}
+                    </h3>
+                    <p>
+                      {trash
+                        ? 'Deleted files will stay here until you restore or permanently delete them.'
+                        : hasActiveFilters
+                          ? 'Remove a filter above or try a different search.'
+                          : pathname === '/starred'
+                            ? 'Star a file to find it here whenever you need it.'
+                            : 'Upload images and PDFs to start building your private space.'}
+                    </p>
+                    {!trash && !hasActiveFilters && pathname !== '/starred' && (
+                      <button
+                        className="btn primary"
+                        onClick={() => pick(folderId)}
+                      >
+                        <Upload size={15} />
+                        Upload your first file
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+              {!overview && data && data.count > data.limit && (
+                <div className="pagination">
+                  <span>
+                    Page {data.page} of {Math.ceil(data.count / data.limit)} ·{' '}
+                    {data.count} results
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn"
+                      disabled={data.page <= 1}
+                      onClick={() => {
+                        const next = new URLSearchParams(params.toString());
+                        next.set('page', String(data.page - 1));
+                        router.push(`${pathname}?${next}`);
+                        setSelected([]);
+                      }}
+                    >
+                      <ChevronLeft size={15} />
+                      Previous
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={data.page * data.limit >= data.count}
+                      onClick={() => {
+                        const next = new URLSearchParams(params.toString());
+                        next.set('page', String(data.page + 1));
+                        router.push(`${pathname}?${next}`);
+                        setSelected([]);
+                      }}
+                    >
+                      Next
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!trash && !collectionId && !collectionPage && (
+                <div className={`dropzone ${drag ? 'drag' : ''}`}>
+                  <span
+                    className="stat-icon"
+                    style={{
+                      width: 43,
+                      height: 43,
+                      background: 'var(--soft)',
+                      color: 'var(--blue)',
+                    }}
+                  >
+                    <Upload size={22} />
+                  </span>
+                  <div>
+                    <strong
+                      style={{
+                        fontSize:
+                          'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
+                      }}
+                    >
+                      A home for everything worth keeping
+                    </strong>
+                    <div
+                      className="muted"
+                      style={{
+                        fontSize:
+                          'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                        marginTop: 5,
+                      }}
+                    >
+                      Drop files here, or{' '}
+                      <button
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: 0,
+                          color: 'var(--blue)',
+                          fontSize:
+                            'max(9px, calc(13px * var(--vault-font-scale, 1)))',
+                        }}
+                        onClick={() => pick(folderId)}
+                      >
+                        browse files
+                      </button>{' '}
+                      to upload · Images & PDFs
+                    </div>
+                  </div>
+                  <ShieldCheck
+                    size={18}
+                    color="#94a3b8"
+                    style={{ marginLeft: 'auto' }}
+                  />
+                </div>
+              )}
+              {overview && <AnalyticsPanels />}
+            </>
+          )}
+        </>
+      )}
+      <Dialog
+        open={Boolean(action)}
+        onOpenChange={(open) => {
+          if (!open && !busy) setAction(null);
+        }}
+        title={action ? dialogTitles[action.type] : ''}
+        description={
+          action?.type === 'revoke-shares'
+            ? 'All links for this file will stop granting access. You can create a new link later.'
+            : action?.type === 'delete' ||
+                action?.type === 'empty-trash' ||
+                action?.type === 'folder-delete'
+              ? 'This removes the original, previews, annotations and search index. This cannot be undone.'
+              : action?.type === 'folder-trash'
+                ? 'This folder and its active contents will move to trash. You can restore them later.'
+                : action?.type === 'collection-delete'
+                  ? 'The collection will be removed. Its files remain in your vault.'
+                  : action?.type === 'share'
+                    ? 'Only this file will be accessible. You can revoke the link at any time.'
+                    : action?.type === 'details'
+                      ? 'Your original file is stored privately.'
+                      : 'Changes are saved to your private vault.'
+        }
+      >
+        {action?.type === 'collection-add' && collectionId ? (
+          <CollectionFilePicker
+            collectionId={collectionId}
+            onDone={() => {
+              setAction(null);
+              void queryClient.invalidateQueries();
+            }}
+          />
+        ) : action?.type === 'folder-details' && action.folder ? (
+          <FolderDetails folder={action.folder} />
+        ) : action?.type === 'sharing-details' && action.file ? (
+          <FileSharing fileId={action.file.id} name={action.file.displayName} />
+        ) : action?.type === 'details' && action.file ? (
+          <FileDetails
+            key={action.file.id}
+            file={action.file}
+            onShare={(file) => openAction({ type: 'share', file })}
+          />
+        ) : (
+          <form onSubmit={save}>
+            {action &&
+              [
+                'folder-create',
+                'collection-create',
+                'rename',
+                'folder-rename',
+                'collection-edit',
+              ].includes(action.type) && (
+                <>
+                  <label className="form-field">
+                    Name
+                    <Input
+                      placeholder={
+                        action?.type.startsWith('folder')
+                          ? 'e.g. Personal documents'
+                          : action?.type.startsWith('collection')
+                            ? 'e.g. Design references'
+                            : 'Enter a file name'
+                      }
+                      autoFocus
+                      required
+                      maxLength={240}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </label>
+                  {!action.type.startsWith('folder-rename') && (
+                    <label className="form-field">
+                      Description
+                      <Textarea
+                        placeholder="Add a short description (optional)"
+                        maxLength={2000}
+                        rows={3}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+            {action &&
+              ['move', 'folder-move', 'collection'].includes(action.type) &&
+              (action.type === 'collection' ? (
+                <CollectionPicker
+                  value={destination}
+                  onChange={setDestination}
+                />
+              ) : (
+                <FolderPicker
+                  exclude={action.folder?.id}
+                  onChange={setDestination}
+                />
+              ))}
+            {action?.type === 'collection-filter' && (
+              <CollectionPicker
+                value={destination}
+                onChange={setDestination}
+                allowNone
+              />
+            )}
+            {action?.type === 'folder-filter' && (
+              <FolderPicker
+                value={destination}
+                label="Search folder"
+                onChange={setDestination}
+              />
+            )}
+            {action?.type === 'share' && (
+              <>
+                {shareUrl ? (
+                  <div className="notice" style={{ marginTop: 18 }}>
+                    <Check size={17} style={{ display: 'inline' }} /> Link
+                    created. Copy it now; raw tokens are never stored.
+                    <Input
+                      placeholder="Your new share link"
+                      readOnly
+                      aria-label="Created share URL"
+                      value={shareUrl}
+                      style={{ width: '100%', marginTop: 10 }}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ marginTop: 10 }}
+                      onClick={() =>
+                        navigator.clipboard
+                          .writeText(shareUrl)
+                          .catch(() =>
+                            setError(
+                              'Copy failed. Select and copy the link manually.',
+                            ),
+                          )
+                      }
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <label className="form-field">
+                      Expiration (optional)
+                      <DateTimePicker
+                        aria-label="Share link expiration"
+                        value={expiry}
+                        onChange={(e) => setExpiry(e.target.value)}
+                      />
+                    </label>
+                    <label className="form-field">
+                      Password (optional, at least 8 characters)
+                      <PasswordInput
+                        placeholder="Set a password (optional, 8+ characters)"
+                        autoComplete="new-password"
+                        minLength={password ? 8 : undefined}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
+              </>
+            )}
+            {error && (
+              <div className="notice error" role="alert">
+                {error}
+              </div>
+            )}
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => setAction(null)}
+              >
+                {shareUrl ? 'Done' : 'Cancel'}
+              </button>
+              {!shareUrl && (
+                <button
+                  className={`btn ${action && ['delete', 'empty-trash', 'folder-delete', 'folder-trash', 'trash', 'collection-delete', 'revoke-shares'].includes(action.type) ? 'danger' : 'primary'}`}
+                  disabled={
+                    busy || (action?.type === 'collection' && !destination)
+                  }
+                >
+                  {busy
+                    ? 'Saving…'
+                    : action?.type === 'share'
+                      ? 'Create secure link'
+                      : action &&
+                          ['trash', 'folder-trash'].includes(action.type)
+                        ? 'Move to trash'
+                        : action?.type === 'revoke-shares'
+                          ? 'Revoke sharing'
+                          : action?.type === 'delete'
+                            ? 'Delete permanently'
+                            : action?.type === 'empty-trash'
+                              ? 'Empty trash'
+                              : action?.type === 'folder-delete'
+                                ? 'Delete permanently'
+                                : action?.type === 'collection-delete'
+                                  ? 'Delete collection'
+                                  : 'Save changes'}
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+      </Dialog>
+    </div>
+  );
+}
+function FilesEmpty() {
+  return <Folder size={29} color="#6c96d7" />;
+}

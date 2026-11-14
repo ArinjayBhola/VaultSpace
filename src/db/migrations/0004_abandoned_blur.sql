@@ -1,0 +1,1 @@
+ALTER TABLE "file_embeddings" ADD CONSTRAINT "embedding_dimensions_match" CHECK (vector_dims("file_embeddings"."embedding")="file_embeddings"."dimensions");
