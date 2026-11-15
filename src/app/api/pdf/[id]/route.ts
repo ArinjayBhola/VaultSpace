@@ -40,6 +40,7 @@ export async function GET(request: Request, context: Context) {
       file: {
         id: file.id,
         name: file.displayName,
+        folderProtected: file.folderProtected,
         pageCount: file.pageCount,
         processingStatus: file.processingStatus,
       },

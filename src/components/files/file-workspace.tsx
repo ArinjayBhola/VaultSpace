@@ -1,9 +1,10 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Download, File, Calendar, HardDrive } from 'lucide-react';
-import { api, bytes, date } from '@/lib/client';
+import { api, bytes } from '@/lib/client';
 import type { VaultFile } from '@/types';
 import { FileSharing } from '@/components/sharing/file-sharing';
 const ContentPreview = dynamic(
@@ -14,6 +15,7 @@ const ContentPreview = dynamic(
   },
 );
 export function FileWorkspace({ id }: { id: string }) {
+  const date = useDateFormatter();
   const { data, error } = useQuery({
     queryKey: ['file-details', id],
     queryFn: ({ signal }) =>
@@ -76,7 +78,11 @@ export function FileWorkspace({ id }: { id: string }) {
           </dl>
         </aside>
       </div>
-      <FileSharing fileId={id} name={file.displayName} />
+      <FileSharing
+        fileId={id}
+        name={file.displayName}
+        folderProtected={file.folderProtected}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { FolderUnlock } from './unlock';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -76,6 +77,8 @@ export function FolderPicker({
           <p className="danger" role="alert">
             {error.message}
           </p>
+        ) : data?.lockedFolder ? (
+          <FolderUnlock folder={data.lockedFolder} />
         ) : data?.folders.length ? (
           data.folders.map((folder) => (
             <button

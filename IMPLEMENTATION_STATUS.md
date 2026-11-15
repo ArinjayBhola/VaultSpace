@@ -181,3 +181,35 @@ Removed the Filters toggle and secondary search card. One toolbar now holds sear
 Presence no longer deletes a session when the shared tab becomes hidden. Valid open pages heartbeat every 20 seconds; counts require a real heartbeat within 90 seconds. Page close/unmount creates a closed-session tombstone; late updates cannot revive it. BFCache restoration uses a new viewer ID. Maintenance removes sessions after five minutes without a heartbeat. This measures recently connected authorized shared-page sessions, not unique people or attention.
 
 Production build including TypeScript, ESLint and read-only filter checks passed. No test files were added or test suite run; browser/fullscreen/presence interaction still requires visual review. No migration or live file mutations were performed. Changes remain local and uncommitted along with prior fixes.
+
+
+## Root vs Recent, folder passwords and stable inline editing
+
+Committed and pushed the preceding UI/sharing fixes as `e70aa6d` before beginning this batch. This batch remains local and uncommitted.
+
+Added optional passwords when creating folders, Better Auth password hashing, session-bound 30-minute unlocks, manual Lock/Unlock folder menu actions, and a shared unlock panel for the workspace and destination picker. Nested folder ancestry is checked in server-side listings, search suggestions, collections, direct file/PDF access, uploads, mutations and cleanup requests. Password hashes are excluded from client responses. Protected tree sharing is blocked and moves into protected ancestry revoke links. Applied migration 0010 successfully to the configured database; read-only checks confirmed its table, column and access functions. Existing folders remain unchanged. No test data or credentials were created.
+
+Clarified My files (root) and Recent (cross-folder recent open/upload order) and added Opened/Uploaded labels in Recent. The inline editor measures its original label's width, height and actual font, hides the immutable extension, and resets input scrolling to the beginning on focus. Only truncated names animate across their label on hover/keyboard focus, with reduced-motion support. Existing unchanged-save and extension guards remain.
+
+Production build including TypeScript passed. ESLint and final strict TypeScript/whitespace checks passed. No test files were created and no test suite was run. Browser interaction and the complete protected-folder workflow still require manual review; these checks do not certify end-to-end behavior.
+
+
+## First-open dialog loading isolation
+
+Traced the first-open workspace skeleton to lazy dialog imports suspending without a nearby boundary. The installed Next.js loadable implementation creates its own boundary only when a loading component is supplied (or SSR is disabled); the existing default imports therefore reached the dashboard loading boundary.
+
+Added a Suspense boundary around the shared Dialog body with an accessible local loading indicator. This covers file details, folder details, file/folder moves, collection pickers, collection file selection and sharing details together. Dialog title and close controls remain available while the module loads; no cache clearing, navigation or extra workspace refetch is added. Existing read-only open handlers do not invalidate workspace data; mutation invalidation remains unchanged.
+
+No test files added and no test suite run. Production build (including TypeScript) and ESLint passed. Browser first-open interaction has not been executed. Changes remain uncommitted.
+
+
+## Locale/timezone hydration mismatch
+
+Replaced implicit server/browser date formatting at every shared date-helper UI call site with a hydration-aware formatter hook. Server rendering and initial hydration use the same explicit locale/timezone snapshot; subsequent browser rendering uses the owner's browser locale/timezone. Applied across the workspace, file/folder details, file workspace, sharing panels, shared links, activity, analytics and account session dates. Calendar-only analytics dates retain their actual calendar day across timezones.
+
+Production build including strict TypeScript passed. Direct formatter verification confirmed identical initial output under UTC and Los Angeles process timezones, correct explicit India/New York output, and a stable date-only day. ESLint passed. No test files were added and no test suite was run. Browser hydration has not been executed. These changes remain local and uncommitted.
+
+
+## Popup scrollbar appearance
+
+Hidden visible scrollbar tracks on the shared dialog container and its nested scrollable content using standard scrollbar-width and WebKit scrollbar rules. Overflow remains auto, so long popup content stays reachable with wheel, trackpad, touch and keyboard. Added scroll containment to the dialog. CSS formatting/parser and whitespace checks passed. No test files or test suite; browser appearance not verified. Changes remain uncommitted.

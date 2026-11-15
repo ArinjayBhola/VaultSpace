@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
+import { FolderUnlock } from '@/components/folders/unlock';
 import dynamic from 'next/dynamic';
 import { splitFileName, withFileExtension } from '@/lib/file-name';
 import { defaultShareExpiry } from '@/lib/time';
@@ -46,8 +48,9 @@ import {
   ShieldCheck,
   ArrowUpRight,
   RefreshCw,
+  LockKeyhole,
 } from 'lucide-react';
-import { api, bytes, date } from '@/lib/client';
+import { api, bytes } from '@/lib/client';
 import type { VaultFile, VaultFolder, FileResponse, Collection } from '@/types';
 import { Dialog } from '@/components/ui/dialog';
 const CollectionPicker = dynamic(() =>
@@ -129,8 +132,11 @@ const titles: Record<string, [string, string]> = {
     'Your space, at a glance',
     'A little more organized. A lot more peace of mind.',
   ],
-  '/files': ['My files', 'Everything worth keeping, all in one place.'],
-  '/recent': ['Recent files', 'Pick up right where you left off.'],
+  '/files': ['My files', 'Files and folders at the root of your vault.'],
+  '/recent': [
+    'Recent files',
+    'Recently opened or uploaded files from every folder.',
+  ],
   '/starred': ['Starred', 'Your favorites, always close at hand.'],
   '/documents': [
     'Documents',
@@ -151,6 +157,7 @@ const titles: Record<string, [string, string]> = {
   '/shared': ['Shared links', 'Your files. Shared on your terms.'],
 };
 export function Workspace() {
+  const date = useDateFormatter();
   const pathname = usePathname();
   const router = useRouter();
   const params = useSearchParams();
@@ -188,6 +195,8 @@ export function Workspace() {
   const [drag, setDrag] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [password, setPassword] = useState('');
+  const [secureFolder, setSecureFolder] = useState(false);
+  const [folderPassword, setFolderPassword] = useState('');
   const [expiry, setExpiry] = useState('');
   const [q, setQ] = useState(params.get('q') ?? '');
   const anchor = useRef<number | null>(null);
@@ -298,6 +307,8 @@ export function Workspace() {
     setError('');
     setShareUrl('');
     setPassword('');
+    setSecureFolder(false);
+    setFolderPassword('');
     setExpiry(next.type === 'share' ? defaultShareExpiry() : '');
     setName(
       (next.type === 'rename' && next.file
@@ -464,6 +475,7 @@ export function Workspace() {
       if (action.type === 'folder-create')
         await mutate({
           operation: 'folder-create',
+          password: secureFolder ? folderPassword : undefined,
           name,
           parentId: folderId,
           description,
@@ -685,6 +697,7 @@ export function Workspace() {
                   </Menu.Item>
                 )}
                 <Menu.Item
+                  disabled={file.folderProtected}
                   className="menu-item"
                   onSelect={() =>
                     openAction({
@@ -694,7 +707,11 @@ export function Workspace() {
                   }
                 >
                   <Link2 size={14} />
-                  {file.activeShareCount ? 'Revoke link' : 'Share file'}
+                  {file.folderProtected
+                    ? 'Sharing locked by folder'
+                    : file.activeShareCount
+                      ? 'Revoke link'
+                      : 'Share file'}
                 </Menu.Item>
                 <Menu.Item
                   className="menu-item"
@@ -744,6 +761,16 @@ export function Workspace() {
       </Menu.Root>
     );
   }
+  if (data?.lockedFolder)
+    return (
+      <div className="workspace-page">
+        <Link href="/files" className="btn">
+          <ChevronLeft size={16} />
+          My files
+        </Link>
+        <FolderUnlock key={data.lockedFolder.id} folder={data.lockedFolder} />
+      </div>
+    );
   const dialogTitles: Record<Action['type'], string> = {
     'collection-filter': 'Search a collection',
     'folder-filter': 'Search a folder',
@@ -1184,13 +1211,25 @@ export function Workspace() {
                             href={`/folders/${f.id}`}
                             style={{ minWidth: 0, flex: 1 }}
                           >
-                            <div className="file-name">{f.name}</div>
+                            <div className="file-name">
+                              {f.protected && (
+                                <LockKeyhole
+                                  size={12}
+                                  style={{ display: 'inline', marginRight: 5 }}
+                                />
+                              )}
+                              {f.name}
+                            </div>
                             <div className="file-subtitle">
                               {trash
                                 ? f.purgeRequestedAt
                                   ? 'Permanent cleanup queued'
                                   : date(f.deletedAt)
-                                : 'Folder'}
+                                : f.protected
+                                  ? f.locked
+                                    ? 'Password protected'
+                                    : 'Unlocked (30 min session)'
+                                  : 'Folder'}
                             </div>
                           </Link>
                           <Menu.Root>
@@ -1222,6 +1261,33 @@ export function Workspace() {
                                 collisionPadding={12}
                                 sticky="partial"
                               >
+                                {f.protected && (
+                                  <Menu.Item
+                                    className="menu-item"
+                                    onSelect={() => {
+                                      if (f.locked) {
+                                        router.push('/folders/' + f.id);
+                                        return;
+                                      }
+                                      void api(
+                                        '/api/folders/' + f.id + '/access',
+                                        { action: 'lock' },
+                                      )
+                                        .then(() => {
+                                          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Discard private previews and query caches after locking.
+                                          window.location.assign(
+                                            '/folders/' + f.id,
+                                          );
+                                        })
+                                        .catch((cause) =>
+                                          setError(cause.message),
+                                        );
+                                    }}
+                                  >
+                                    <LockKeyhole size={15} />
+                                    {f.locked ? 'Unlock folder' : 'Lock folder'}
+                                  </Menu.Item>
+                                )}
                                 {trash ? (
                                   <>
                                     <Menu.Item
@@ -1879,7 +1945,18 @@ export function Workspace() {
                           <div className="file-subtitle">
                             {bytes(f.sizeBytes)}
                             <span style={{ margin: '0 6px' }}>·</span>
-                            {date(trash ? f.deletedAt : f.createdAt)}
+                            {pathname === '/recent'
+                              ? f.lastAccessedAt
+                                ? 'Opened '
+                                : 'Uploaded '
+                              : ''}
+                            {date(
+                              trash
+                                ? f.deletedAt
+                                : pathname === '/recent'
+                                  ? (f.lastAccessedAt ?? f.createdAt)
+                                  : f.createdAt,
+                            )}
                           </div>
                         </div>
                       </motion.article>
@@ -1949,7 +2026,18 @@ export function Workspace() {
                             </td>
                             <td className="muted">{bytes(f.sizeBytes)}</td>
                             <td className="muted">
-                              {date(trash ? f.deletedAt : f.createdAt)}
+                              {pathname === '/recent'
+                                ? f.lastAccessedAt
+                                  ? 'Opened '
+                                  : 'Uploaded '
+                                : ''}
+                              {date(
+                                trash
+                                  ? f.deletedAt
+                                  : pathname === '/recent'
+                                    ? (f.lastAccessedAt ?? f.createdAt)
+                                    : f.createdAt,
+                              )}
                             </td>
                             <td>
                               <span className="badge">
@@ -2146,7 +2234,11 @@ export function Workspace() {
         ) : action?.type === 'folder-details' && action.folder ? (
           <FolderDetails folder={action.folder} />
         ) : action?.type === 'sharing-details' && action.file ? (
-          <FileSharing fileId={action.file.id} name={action.file.displayName} />
+          <FileSharing
+            fileId={action.file.id}
+            name={action.file.displayName}
+            folderProtected={action.file.folderProtected}
+          />
         ) : action?.type === 'details' && action.file ? (
           <FileDetails
             key={action.file.id}
@@ -2222,6 +2314,42 @@ export function Workspace() {
                   )}
                 </>
               )}
+            {action?.type === 'folder-create' && (
+              <div className="folder-password-options">
+                <label className="form-field">
+                  <span>
+                    <input
+                      type="checkbox"
+                      checked={secureFolder}
+                      onChange={(event) =>
+                        setSecureFolder(event.target.checked)
+                      }
+                    />{' '}
+                    Protect with a password
+                  </span>
+                </label>
+                {secureFolder && (
+                  <label className="form-field">
+                    Folder password
+                    <PasswordInput
+                      required
+                      minLength={8}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      placeholder="Choose a folder password (8+ characters)"
+                      value={folderPassword}
+                      onChange={(event) =>
+                        setFolderPassword(event.target.value)
+                      }
+                    />
+                    <span className="muted">
+                      Required to open this folder and its contents. Keep this
+                      password safe.
+                    </span>
+                  </label>
+                )}
+              </div>
+            )}
             {action &&
               ['move', 'folder-move', 'collection'].includes(action.type) &&
               (action.type === 'collection' ? (

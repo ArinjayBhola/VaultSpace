@@ -1,3 +1,4 @@
+import { folderScope, fileAccessSQL } from '@/lib/folder-access';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { db } from '@/db';
 import { files, activityEvents, settings } from '@/db/schema';
@@ -7,6 +8,7 @@ import { z } from 'zod';
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
+    const scope = await folderScope(user.id);
     const timeZone = z
       .string()
       .min(1)
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
           })
           .from(files)
           .where(
-            sql`${files.ownerId}=${user.id} and ${files.deletedAt} is null and ${files.uploadStatus}='complete'`,
+            sql`${files.ownerId}=${user.id} and ${files.deletedAt} is null and ${files.uploadStatus}='complete' and ${fileAccessSQL(scope.sessionId)}`,
           )
           .orderBy(desc(files.sizeBytes))
           .limit(5),

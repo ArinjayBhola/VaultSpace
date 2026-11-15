@@ -2,8 +2,8 @@
 
 import { Tooltip } from '@/components/ui/tooltip';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useRef } from 'react';
-import { X } from 'lucide-react';
+import { Suspense, useRef } from 'react';
+import { LoaderCircle, X } from 'lucide-react';
 export function Dialog({
   open,
   onOpenChange,
@@ -52,7 +52,31 @@ export function Dialog({
               <X size={17} />
             </DialogPrimitive.Close>
           </Tooltip>
-          {children}
+          {/* Keep first-use lazy content from suspending the whole workspace. */}
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="muted"
+                style={{
+                  minHeight: 120,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                }}
+              >
+                <LoaderCircle
+                  size={18}
+                  className="vault-spinner"
+                  aria-hidden="true"
+                />
+                Loading options...
+              </div>
+            }
+          >
+            {children}
+          </Suspense>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

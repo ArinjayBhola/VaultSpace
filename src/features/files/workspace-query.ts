@@ -1,3 +1,10 @@
+import {
+  assertFolderAccess,
+  FolderLockedError,
+  folderScope,
+  fileAccessSQL,
+  folderParentAccessSQL,
+} from '@/lib/folder-access';
 import { typeLabel } from '@/lib/file-types';
 import 'server-only';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -10,6 +17,30 @@ export async function workspaceData(
   ownerId: string,
   query: z.infer<typeof searchFilters>,
 ) {
+  const access = await folderScope(ownerId);
+  if (query.folder) {
+    try {
+      await assertFolderAccess(ownerId, query.folder);
+    } catch (error) {
+      if (!(error instanceof FolderLockedError)) throw error;
+      return {
+        files: [],
+        folders: [],
+        count: 0,
+        folderCount: 0,
+        collections: [],
+        collectionCount: 0,
+        currentCollection: null,
+        cleanup: null,
+        breadcrumbs: [{ id: error.folderId, name: error.folderName }],
+        fileTypes: [],
+        lockedFolder: { id: error.folderId, name: error.folderName },
+        page: query.page,
+        limit: query.limit,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  }
   const [
     data,
     folderRows,
@@ -40,6 +71,7 @@ export async function workspaceData(
       .where(
         and(
           eq(folders.ownerId, ownerId),
+          folderParentAccessSQL(access.sessionId),
           query.view === 'trash'
             ? sql`${folders.deletedAt} is not null`
             : isNull(folders.deletedAt),
@@ -96,6 +128,7 @@ export async function workspaceData(
         and(
           eq(files.ownerId, ownerId),
           eq(files.uploadStatus, 'complete'),
+          fileAccessSQL(access.sessionId),
           query.view === 'trash'
             ? sql`${files.deletedAt} is not null`
             : isNull(files.deletedAt),
@@ -126,6 +159,7 @@ export async function workspaceData(
       updatedAt: file.updatedAt.toISOString(),
       deletedAt: file.deletedAt?.toISOString() ?? null,
       starredAt: file.starredAt?.toISOString() ?? null,
+      lastAccessedAt: file.lastAccessedAt?.toISOString() ?? null,
     })),
     folders: folderRows.map((folder) => ({
       ...folder,

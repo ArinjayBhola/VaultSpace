@@ -1,3 +1,4 @@
+import { folderScope, fileAccessSQL } from '@/lib/folder-access';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
@@ -8,6 +9,8 @@ import { respond } from '@/lib/api';
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
+    const scope = await folderScope(user.id);
+    const accessible = sql`(${activityEvents.fileId} is null or exists(select 1 from files where files.id=${activityEvents.fileId} and ${fileAccessSQL(scope.sessionId)}))`;
     const page = z.coerce
       .number()
       .int()
@@ -22,7 +25,7 @@ export async function GET(request: Request) {
       const [total] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(activityEvents)
-        .where(eq(activityEvents.ownerId, user.id));
+        .where(and(eq(activityEvents.ownerId, user.id), accessible));
       const items = await tx
         .select({
           id: activityEvents.id,
@@ -35,7 +38,7 @@ export async function GET(request: Request) {
           files,
           and(eq(files.id, activityEvents.fileId), eq(files.ownerId, user.id)),
         )
-        .where(eq(activityEvents.ownerId, user.id))
+        .where(and(eq(activityEvents.ownerId, user.id), accessible))
         .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
         .limit(limit)
         .offset((page - 1) * limit);

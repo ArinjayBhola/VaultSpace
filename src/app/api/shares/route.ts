@@ -1,3 +1,5 @@
+import { folderScope, fileAccessSQL } from '@/lib/folder-access';
+import { ownedFile } from '@/features/files/service';
 import { vaultWriteLock } from '@/db/lock';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -16,6 +18,7 @@ import {
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
+    const scope = await folderScope(user.id);
     const query = z
       .object({
         page: z.coerce.number().int().min(1).max(100000).default(1),
@@ -27,6 +30,7 @@ export async function GET(request: Request) {
     const endedAt = sql`least(${shareLinks.revokedAt},${shareLinks.expiresAt},${files.deletedAt})`;
     const where = and(
       eq(files.ownerId, user.id),
+      fileAccessSQL(scope.sessionId),
       sql`((${active}) or ${endedAt}>now()-interval '24 hours')`,
       query.fileId ? eq(shareLinks.fileId, query.fileId) : undefined,
       query.status === 'active'
@@ -144,6 +148,13 @@ export async function POST(request: Request) {
       });
     }
     if (input.action === 'create') {
+      const accessible = await ownedFile(user.id, input.fileId);
+      if (accessible.folderProtected)
+        throw new ApiError(
+          403,
+          'FOLDER_PROTECTED',
+          'Move this file outside its password-protected folder before sharing it publicly.',
+        );
       if (input.expiresAt && new Date(input.expiresAt) <= new Date())
         throw new ApiError(
           400,
@@ -166,6 +177,7 @@ export async function POST(request: Request) {
               eq(files.ownerId, user.id),
               isNull(files.deletedAt),
               eq(files.uploadStatus, 'complete'),
+              sql`not vault_folder_protected(${files.folderId})`,
             ),
           );
         if (!file) throw new ApiError(404, 'NOT_FOUND', 'File not found.');

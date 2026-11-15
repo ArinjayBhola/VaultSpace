@@ -1,3 +1,8 @@
+import {
+  folderScope,
+  fileAccessSQL,
+  assertFolderAccess,
+} from '@/lib/folder-access';
 import { vaultWriteLock } from '@/db/lock';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
@@ -22,6 +27,7 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
+    const scope = await folderScope(user.id);
     if (!new URL(request.url).searchParams.has('ids')) {
       const [preferences] = await db()
         .select()
@@ -52,6 +58,7 @@ export async function GET(request: Request) {
           eq(files.ownerId, user.id),
           inArray(files.id, ids),
           eq(files.uploadStatus, 'complete'),
+          fileAccessSQL(scope.sessionId),
         ),
       );
   });
@@ -83,6 +90,7 @@ export async function POST(request: Request) {
   return respond(async () => {
     originGuard(request);
     const user = await owner();
+    const scope = await folderScope(user.id);
     const input = inputSchema.parse(await readJSON(request));
     if (input.action === 'create') {
       input.mime = uploadMime(input.name, input.mime);
@@ -118,6 +126,7 @@ export async function POST(request: Request) {
               eq(files.ownerId, user.id),
               eq(files.checksum, input.checksum),
               eq(files.uploadStatus, 'complete'),
+              fileAccessSQL(scope.sessionId),
             ),
           )
           .limit(1);
@@ -205,6 +214,8 @@ export async function POST(request: Request) {
       .where(and(eq(uploads.id, input.id), eq(uploads.ownerId, user.id)));
     if (!upload)
       throw new ApiError(404, 'UPLOAD_NOT_FOUND', 'Upload session not found.');
+    if (input.action !== 'cancel')
+      await assertFolderAccess(user.id, upload.targetFolderId);
     if (upload.status === 'complete' && input.action === 'complete') {
       const [file] = await db()
         .select({ processingStatus: files.processingStatus })
@@ -423,6 +434,7 @@ export async function POST(request: Request) {
             'COPY_MISMATCH',
             'Stored original failed verification.',
           );
+        await assertFolderAccess(user.id, upload.targetFolderId);
         let folderId = upload.targetFolderId;
         if (folderId) {
           const result = await tx.execute(

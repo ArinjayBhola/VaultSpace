@@ -27,6 +27,8 @@ export async function GET(
         id: file.id,
         activeShareCount: job?.activeShareCount ?? 0,
         folderId: file.folderId,
+        folderProtected: file.folderProtected,
+        lastAccessedAt: file.lastAccessedAt,
         displayName: file.displayName,
         originalFilename: file.originalFilename,
         mimeType: file.mimeType,

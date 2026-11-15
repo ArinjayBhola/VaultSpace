@@ -54,6 +54,7 @@ type PDFData = {
     name: string;
     pageCount: number | null;
     processingStatus: string;
+    folderProtected: boolean;
   };
   annotations: Annotation[];
   bookmarks: { id: string; pageNumber: number; label: string }[];
@@ -451,7 +452,11 @@ export default function Reader({ id }: { id: string }) {
           </button>
         </div>
       </div>
-      <FileSharing fileId={id} name={data.file.name} />
+      <FileSharing
+        fileId={id}
+        name={data.file.name}
+        folderProtected={data.file.folderProtected}
+      />
       <Document
         options={pdfOptions}
         file={`/api/files/${id}/content`}

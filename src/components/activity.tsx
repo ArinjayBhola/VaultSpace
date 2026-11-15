@@ -1,10 +1,11 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Clock3, ChevronLeft, ChevronRight } from 'lucide-react';
 import { activityLabel } from '@/lib/activity-label';
-import { api, date } from '@/lib/client';
+import { api } from '@/lib/client';
 type ActivityPage = {
   items: {
     id: string;
@@ -17,6 +18,7 @@ type ActivityPage = {
   pages: number;
 };
 export function ActivityHistory() {
+  const date = useDateFormatter();
   const params = useSearchParams();
   const raw = Number(params.get('page') || 1);
   const page = Number.isInteger(raw) && raw > 0 && raw <= 100000 ? raw : 1;

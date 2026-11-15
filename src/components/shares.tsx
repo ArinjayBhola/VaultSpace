@@ -1,4 +1,5 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 import Link from 'next/link';
 import { Select } from '@/components/ui/select';
 import { useState } from 'react';
@@ -13,7 +14,7 @@ import {
   Copy,
   ExternalLink,
 } from 'lucide-react';
-import { api, date } from '@/lib/client';
+import { api } from '@/lib/client';
 type Share = {
   url: string | null;
   endedAt: string | null;
@@ -32,6 +33,7 @@ type Share = {
   activeViewers: number;
 };
 export function Shares() {
+  const date = useDateFormatter();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('all');
   const { data, error, isPending } = useQuery({

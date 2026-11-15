@@ -48,15 +48,16 @@ function createAuth() {
     },
   });
 }
-export const owner = cache(async () => {
+export const ownerSession = cache(async () => {
   const requestHeaders = await headers();
   if (!requestHeaders.get('cookie'))
     throw new ApiError(401, 'UNAUTHORIZED', 'Please sign in to continue.');
   const result = await auth().api.getSession({ headers: requestHeaders });
   if (!result)
     throw new ApiError(401, 'UNAUTHORIZED', 'Please sign in to continue.');
-  return result.user;
+  return result;
 });
+export const owner = cache(async () => (await ownerSession()).user);
 export async function pageOwner() {
   if (!process.env.DATABASE_URL || !process.env.BETTER_AUTH_SECRET)
     redirect('/login');

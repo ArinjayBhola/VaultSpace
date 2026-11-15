@@ -38,18 +38,26 @@ export function bytes(value: number) {
   const i = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
   return `${(value / 1024 ** i).toFixed(i ? 1 : 0)} ${['B', 'KB', 'MB', 'GB', 'TB'][i]}`;
 }
-export function date(value: string | Date | null) {
+// A deterministic default is required for server rendering and hydration.
+// Client UI supplies browser preferences only after hydration.
+export function date(
+  value: string | Date | null,
+  locale = 'en-US',
+  timeZone = 'Asia/Kolkata',
+) {
   if (!value) return '—';
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value))
-    return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+    return new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'UTC',
     });
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '—';
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone,
   }).format(parsed);
 }

@@ -1,5 +1,7 @@
 export type VaultFile = {
   activeShareCount?: number;
+  folderProtected?: boolean;
+  lastAccessedAt: string | null;
   id: string;
   folderId: string | null;
   displayName: string;
@@ -19,6 +21,8 @@ export type VaultFile = {
   relevance: number;
 };
 export type VaultFolder = {
+  protected: boolean;
+  locked: boolean;
   purgeRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -35,6 +39,7 @@ export type Collection = {
   count: number;
 };
 export type FileResponse = {
+  lockedFolder?: { id: string; name: string };
   fileTypes: { value: string; label: string; count: number }[];
   cleanup: { available: boolean; failed: boolean } | null;
   collectionCount: number;

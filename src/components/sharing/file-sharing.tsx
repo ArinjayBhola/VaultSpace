@@ -1,4 +1,5 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 
 import { PasswordInput } from '@/components/ui/password-input';
 import { useState } from 'react';
@@ -16,7 +17,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { defaultShareExpiry } from '@/lib/time';
-import { api, date } from '@/lib/client';
+import { api } from '@/lib/client';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DateTimePicker } from '@/components/ui/date-picker';
@@ -43,11 +44,14 @@ type Response = {
 export function FileSharing({
   fileId,
   name,
+  folderProtected = false,
 }: {
   fileId: string;
   name: string;
+  folderProtected?: boolean;
 }) {
   const client = useQueryClient();
+  const date = useDateFormatter();
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [expiry, setExpiry] = useState('');
@@ -75,6 +79,7 @@ export function FileSharing({
     isPending,
   } = useQuery({
     queryKey: ['shares', fileId, page],
+    enabled: !folderProtected,
     queryFn: () => api<Response>(`/api/shares?fileId=${fileId}&page=${page}`),
     refetchInterval: 5000,
   });
@@ -133,6 +138,23 @@ export function FileSharing({
       setBusy(false);
     }
   }
+  if (folderProtected)
+    return (
+      <section className="card file-sharing-panel">
+        <div className="sharing-panel-heading">
+          <div>
+            <h2>
+              <ShieldCheck size={17} />
+              Folder protected
+            </h2>
+            <p>
+              Public sharing is disabled inside password-protected folders. Move
+              the file outside the protected folder to share it.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
   return (
     <section className="card file-sharing-panel">
       <div className="sharing-panel-heading">

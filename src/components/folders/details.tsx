@@ -1,14 +1,18 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
+import { FolderUnlock } from './unlock';
 import { useQuery } from '@tanstack/react-query';
 import { Folder } from 'lucide-react';
 import type { VaultFolder, FileResponse } from '@/types';
-import { api, date } from '@/lib/client';
+import { api } from '@/lib/client';
 export function FolderDetails({ folder }: { folder: VaultFolder }) {
+  const date = useDateFormatter();
   const { data, error } = useQuery({
     queryKey: ['folder-details', folder.id],
     queryFn: () =>
       api<FileResponse>(`/api/files?folder=${folder.id}&view=root&limit=1`),
   });
+  if (data?.lockedFolder) return <FolderUnlock folder={data.lockedFolder} />;
   return (
     <>
       <Folder size={42} color="#d6a843" style={{ margin: '20px 0' }} />

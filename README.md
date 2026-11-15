@@ -126,3 +126,14 @@ Rename editors expose only the base name. The popup shows a locked extension suf
 Image previews now fit their natural dimensions to the available card width and height, with a live zoom percentage, Fit reset and View full control on both owner and public shared pages. Only deliberate zooming beyond the viewport introduces image scrollbars. File pages use one toolbar for name search, Clear, sorting/view mode and checkbox-based multi-type selection. Repeated `type` URL parameters combine with OR in PostgreSQL and persist across reloads; individual filter chips can be removed. The upload banner appears only on /.
 
 Live shared-page sessions send real heartbeats every 20 seconds, including while backgrounded. Active counts require a heartbeat within 90 seconds and an unexpired authorization/share. Page close sends a closed-session marker; stale sessions disappear naturally if the browser stops sending. These are open shared-page sessions, not unique people or proof of attention.
+
+
+## Folder passwords and filename interaction
+
+Create folder now offers an optional password (8-128 characters). Folder passwords are hashed with Better Auth's supported password hasher. Opening a protected folder requires its password; grants last up to 30 minutes in the current login session. Use the folder menu to lock it earlier. Nested protected folders require their own unlocks. Keep these passwords safe: there is no password recovery interface.
+
+This is application access control, not encryption. Locked contents are excluded from file browsing, Recent, search, collection results, activity filenames and named analytics results; direct file, preview, download and PDF endpoints also check ancestor locks. Aggregate storage totals still include protected files for accurate accounting. Public sharing is disabled within protected folder trees, and moving a shared file/tree into one revokes existing links.
+
+Migration `0010_goofy_payback` adds nullable folder password hashes, session-bound unlock records and recursive access functions. Run `npm run db:migrate` in other environments before deploying this version. Existing folders remain unprotected.
+
+My files lists the vault root and its folders. Recent lists files across folders, ordered by the most recent open/upload by default, and labels its dates accordingly. Inline rename measures the original label's width, height and font; it starts at the beginning of the base name and preserves the extension. Truncated filenames scroll on hover or keyboard focus, respecting reduced-motion preferences.

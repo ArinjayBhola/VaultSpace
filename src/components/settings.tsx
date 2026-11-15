@@ -1,4 +1,5 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 
 import { TypographySettings } from '@/components/ui/typography-settings';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -17,7 +18,7 @@ import {
   LogOut,
   Check,
 } from 'lucide-react';
-import { api, date, bytes } from '@/lib/client';
+import { api, bytes } from '@/lib/client';
 import { useLocalPreference } from '@/hooks/use-local-preference';
 import { Dialog } from '@/components/ui/dialog';
 type Preferences = {
@@ -52,6 +53,7 @@ export function Settings() {
   );
 }
 function SettingsForm({ data }: { data: SettingsResponse }) {
+  const date = useDateFormatter();
   const router = useRouter();
   const params = useSearchParams();
   const section = ['account', 'appearance', 'storage', 'security'].includes(

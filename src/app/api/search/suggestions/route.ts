@@ -1,3 +1,4 @@
+import { folderScope, fileAccessSQL } from '@/lib/folder-access';
 import { and, eq, isNull, asc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
@@ -7,6 +8,7 @@ import { respond } from '@/lib/api';
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
+    const scope = await folderScope(user.id);
     const q = z
       .string()
       .trim()
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(files.ownerId, user.id),
+          fileAccessSQL(scope.sessionId),
           eq(files.uploadStatus, 'complete'),
           isNull(files.deletedAt),
           sql`(${files.displayName} ilike ${pattern} or ${files.originalFilename} ilike ${pattern} or ${files.extension} ilike ${pattern} or ${files.mimeType} ilike ${pattern})`,

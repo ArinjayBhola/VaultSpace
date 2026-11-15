@@ -33,3 +33,18 @@ Typography preferences use the existing local preference store and a global clie
 Sharing lifecycle: GET /api/shares consistently scopes rows, pagination and totals to active links or the first 24 hours after the earliest expiry/revocation/deletion timestamp. Creation holds the vault transaction lock and rejects another active share; migration 0009 additionally guards active inserts/lifecycle updates in PostgreSQL. Active links sort first. New share tokens are keyed pseudorandom values derived from random share IDs; only token hashes are stored. Owner-only URL recovery verifies these hashes. Hash-only older links use a versioned HMAC alias bound to ID plus current stored hash; the public resolver authenticates it and applies the same current share/file/grant rules. No legacy bearer needs to be recovered or stored.
 
 Workspace filters now parse repeated type parameters consistently on server-rendered pages and API handlers, normalize their query-cache keys and OR selected types in the database. A single toolbar owns search, multi-type selection, clear, sort and view controls. Image fit derives from ResizeObserver viewport dimensions and the loaded image's natural dimensions; the same component serves owner/public previews and fullscreen. Shared-page presence stays alive through valid recent background heartbeats, while closed-session tombstones prevent late requests from resurrecting a viewer. No schema migration is required.
+
+
+## Password-protected folder boundaries
+
+`folders.password_hash` is optional and never returned to clients. `folder_unlocks` stores an expiring `(folder_id, session_id)` grant with cascading foreign keys to folders and Better Auth sessions. Password verification is authenticated, origin-checked and throttled to five attempts per folder/minute. Unlocks expire after 30 minutes or session expiration, whichever comes first. Locking removes the current session's subtree grants and reloads the document to discard private client caches.
+
+`vault_folder_access` walks the ancestor chain and requires valid grants for every protected ancestor; `vault_folder_protected` detects public-sharing restrictions. Database predicates apply before pagination and counts. Application services separately guard file reads, destinations, folder trees and mutations. The workspace returns only an unlock target when a protected ancestor blocks access; direct document routes redirect to that folder. Optional folder grants use request-local memoization through AsyncLocalStorage for API reads. Storage aggregates retain all owner bytes; named results omit locked contents.
+
+Folder passwords are access controls, not object encryption. Public delivery rejects protected trees even for previously authorized share grants. Moving files or folders into protected ancestry revokes their public links under the vault write lock. Existing download authorizations/in-flight responses retain their normal short expiry; downloaded bytes cannot be withdrawn.
+
+
+Shared dialogs wrap their body in a local React Suspense boundary. First-use dynamic imports for file/folder details, folder/collection destination pickers, collection file selection and sharing stay within the popup; the dialog title/close control and the underlying workspace remain mounted.
+
+
+UI timestamps use `useDateFormatter`: useSyncExternalStore provides the same server snapshot during SSR and initial hydration, then enables the browser locale and timezone. The shared formatter has an explicit en-US/Asia-Kolkata initial format; it never relies on the server process locale or timezone. Calendar-only dates use UTC date-only formatting to preserve the intended day. No hydration warnings are suppressed.

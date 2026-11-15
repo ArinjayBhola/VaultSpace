@@ -1,12 +1,14 @@
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { FileText, ArrowUpRight, Activity, Clock3 } from 'lucide-react';
 import { userTimeZone, timeZoneLabel } from '@/lib/time';
 import { activityLabel } from '@/lib/activity-label';
-import { api, bytes, date } from '@/lib/client';
+import { api, bytes } from '@/lib/client';
 import type { Analytics } from '@/types';
 export function AnalyticsPanels({ full = false }: { full?: boolean }) {
+  const date = useDateFormatter();
   const { data, error } = useQuery({
     queryKey: ['analytics', userTimeZone()],
     staleTime: 120000,

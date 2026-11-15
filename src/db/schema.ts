@@ -96,6 +96,7 @@ export const folders = pgTable(
     purgeRequestedAt: time('purge_requested_at'),
     name: text('name').notNull(),
     description: text('description').notNull().default(''),
+    passwordHash: text('password_hash'),
     createdAt: created(),
     updatedAt: updated(),
     deletedAt: time('deleted_at'),
@@ -110,6 +111,22 @@ export const folders = pgTable(
         sql`lower(${t.name})`,
       )
       .where(sql`${t.deletedAt} is null`),
+  ],
+);
+export const folderUnlocks = pgTable(
+  'folder_unlocks',
+  {
+    folderId: uuid('folder_id')
+      .notNull()
+      .references(() => folders.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    expiresAt: time('expires_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.folderId, table.sessionId] }),
+    index('folder_unlocks_session').on(table.sessionId, table.expiresAt),
   ],
 );
 export const files = pgTable(

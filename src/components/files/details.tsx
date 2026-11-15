@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- Private preview URLs require the owner's session. */
 'use client';
+import { useDateFormatter } from '@/hooks/use-date-formatter';
 
 import { Tooltip } from '@/components/ui/tooltip';
 import { useState } from 'react';
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { rasterTypes } from '@/lib/file-types';
-import { api, bytes, date } from '@/lib/client';
+import { api, bytes } from '@/lib/client';
 import type { VaultFile } from '@/types';
 type Details = {
   file: VaultFile;
@@ -33,6 +34,7 @@ export function FileDetails({
   onShare: (file: VaultFile) => void;
 }) {
   const client = useQueryClient();
+  const date = useDateFormatter();
   const [zoom, setZoom] = useState(1);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState('');
@@ -277,9 +279,17 @@ export function FileDetails({
           <ArrowUpRight size={15} />
           {pdf ? 'Open PDF' : 'Open file'}
         </Link>
-        <button className="btn primary" onClick={() => onShare(file)}>
+        <button
+          className="btn primary"
+          disabled={file.folderProtected}
+          onClick={() => onShare(file)}
+        >
           <Link2 size={15} />
-          {file.activeShareCount ? 'Revoke link' : 'Share'}
+          {file.folderProtected
+            ? 'Folder protected'
+            : file.activeShareCount
+              ? 'Revoke link'
+              : 'Share'}
         </button>
       </div>
     </div>

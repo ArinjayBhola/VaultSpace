@@ -2109,3 +2109,90 @@ body {
 .file-toolbar .file-toolbar-search {
   width: auto;
 }
+
+.inline-file-name-trigger {
+  position: relative;
+}
+.inline-name-static {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inline-name-marquee {
+  position: absolute;
+  inset: 3px 4px;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.inline-name-track {
+  display: inline-block;
+  width: max-content;
+  white-space: nowrap;
+}
+.inline-file-name-trigger[data-marquee='true'] .inline-name-static {
+  visibility: hidden;
+}
+.inline-file-name-trigger[data-marquee='true'] .inline-name-marquee {
+  visibility: visible;
+}
+.inline-file-name-field {
+  margin-left: -4px;
+  border-radius: 5px;
+  max-width: none;
+  flex-shrink: 0;
+}
+.inline-file-name .inline-file-name-input {
+  padding: 3px 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .inline-file-name-trigger[data-marquee='true'] .inline-name-static {
+    visibility: visible;
+  }
+  .inline-name-marquee {
+    display: none;
+  }
+}
+
+.folder-unlock {
+  max-width: 440px;
+  margin: 48px auto;
+  padding: 28px;
+  display: grid;
+  gap: 16px;
+}
+.folder-unlock h2,
+.folder-unlock p {
+  margin: 0;
+}
+.folder-unlock > p:last-child {
+  font-size: 0.85em;
+}
+.folder-lock-symbol {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--soft);
+  color: var(--blue);
+}
+.folder-password-options {
+  margin: 16px 0;
+}
+
+/* Keep popup content scrollable without a visible scrollbar track. */
+.dialog-content,
+.dialog-content * {
+  scrollbar-width: none;
+}
+.dialog-content::-webkit-scrollbar,
+.dialog-content *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.dialog-content {
+  overscroll-behavior: contain;
+}

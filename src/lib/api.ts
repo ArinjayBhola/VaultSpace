@@ -1,3 +1,4 @@
+import { withFolderScope } from '@/lib/folder-access';
 import { NextResponse } from 'next/server';
 import { ZodError, z } from 'zod';
 import { ApiError } from './auth';
@@ -47,7 +48,10 @@ export function originGuard(request: Request) {
       'This request origin is not permitted.',
     );
 }
-export async function respond(fn: () => Promise<unknown>) {
+export function respond(fn: () => Promise<unknown>) {
+  return withFolderScope(() => respondInScope(fn));
+}
+async function respondInScope(fn: () => Promise<unknown>) {
   try {
     return NextResponse.json(await fn(), {
       headers: { 'Cache-Control': 'private, no-store' },

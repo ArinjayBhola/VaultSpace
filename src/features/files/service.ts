@@ -1,3 +1,11 @@
+import {
+  assertFolderAccess,
+  assertTreeAccess,
+  folderScope,
+  fileAccessSQL,
+  folderParentAccessSQL,
+  folderProtected,
+} from '@/lib/folder-access';
 import { vaultWriteLock } from '@/db/lock';
 import {
   and,
@@ -40,7 +48,8 @@ export async function ownedFile(
     );
   if (!file || file.uploadStatus !== 'complete')
     throw new ApiError(404, 'NOT_FOUND', 'File not found.');
-  return file;
+  await assertFolderAccess(ownerId, file.folderId);
+  return { ...file, folderProtected: await folderProtected(file.folderId) };
 }
 export async function checkFolder(ownerId: string, folderId: string | null) {
   if (!folderId) return;
@@ -60,6 +69,7 @@ export async function checkFolder(ownerId: string, folderId: string | null) {
       'FOLDER_NOT_FOUND',
       'Destination folder is unavailable.',
     );
+  await assertFolderAccess(ownerId, folderId);
 }
 export async function event(
   ownerId: string,
@@ -76,7 +86,10 @@ export async function listFiles(
   ownerId: string,
   input: z.infer<typeof searchFilters>,
 ) {
+  const access = await folderScope(ownerId);
+  if (input.folder) await assertFolderAccess(ownerId, input.folder);
   const conditions: SQL[] = [
+    fileAccessSQL(access.sessionId),
     eq(files.ownerId, ownerId),
     eq(files.uploadStatus, 'complete'),
     input.view === 'trash'
@@ -144,6 +157,8 @@ export async function listFiles(
         starredAt: files.starredAt,
         processingStatus: files.processingStatus,
         description: files.description,
+        lastAccessedAt: files.lastAccessedAt,
+        folderProtected: sql<boolean>`vault_folder_protected(${sql.identifier('files')}.${sql.identifier('folder_id')})`,
         pageCount: files.pageCount,
         width: files.width,
         height: files.height,
@@ -181,6 +196,13 @@ export async function mutateFiles(
     'star' | 'unstar' | 'trash' | 'restore' | 'move' | 'delete' | 'reprocess',
   folderId?: string | null,
 ) {
+  const access = await folderScope(ownerId);
+  const sources = await db()
+    .select({ folderId: files.folderId })
+    .from(files)
+    .where(and(eq(files.ownerId, ownerId), inArray(files.id, ids)));
+  for (const source of sources)
+    await assertFolderAccess(ownerId, source.folderId);
   if (action === 'move') await checkFolder(ownerId, folderId ?? null);
   return db().transaction(async (tx) => {
     await tx.execute(vaultWriteLock);
@@ -188,7 +210,13 @@ export async function mutateFiles(
     const rows = await tx
       .select()
       .from(files)
-      .where(and(eq(files.ownerId, ownerId), inArray(files.id, ids)));
+      .where(
+        and(
+          eq(files.ownerId, ownerId),
+          inArray(files.id, ids),
+          fileAccessSQL(access.sessionId),
+        ),
+      );
     if (rows.length !== ids.length)
       throw new ApiError(
         404,
@@ -298,6 +326,9 @@ export async function mutateFiles(
         .insert(activityEvents)
         .values({ ownerId, fileId: file.id, eventType: `file_${action}` });
     }
+    await tx.execute(
+      sql`update share_links s set revoked_at=now() from files f where s.file_id=f.id and f.owner_id=${ownerId} and s.revoked_at is null and vault_folder_protected(f.folder_id)`,
+    );
     return { success: true, count: rows.length };
   });
 }
@@ -307,12 +338,28 @@ export async function listFolders(
   trash = false,
   page = 1,
 ) {
+  await assertFolderAccess(ownerId, parentId);
+  const access = await folderScope(ownerId);
   return db()
-    .select()
+    .select({
+      id: folders.id,
+      ownerId: folders.ownerId,
+      parentId: folders.parentId,
+      purgeRequestedAt: folders.purgeRequestedAt,
+      name: folders.name,
+      description: sql<string>`case when vault_folder_access(${sql.identifier('folders')}.${sql.identifier('id')},${access.sessionId}) then ${folders.description} else '' end`,
+      createdAt: folders.createdAt,
+      updatedAt: folders.updatedAt,
+      deletedAt: folders.deletedAt,
+      deletionRootId: folders.deletionRootId,
+      protected: sql<boolean>`${folders.passwordHash} is not null`,
+      locked: sql<boolean>`not vault_folder_access(${sql.identifier('folders')}.${sql.identifier('id')},${access.sessionId})`,
+    })
     .from(folders)
     .where(
       and(
         eq(folders.ownerId, ownerId),
+        folderParentAccessSQL(access.sessionId),
         trash ? isNotNull(folders.deletedAt) : isNull(folders.deletedAt),
         trash
           ? undefined
@@ -331,12 +378,13 @@ export async function listCollections(
   page = 1,
   query = '',
 ) {
+  const access = await folderScope(ownerId);
   return db()
     .select({
       id: collections.id,
       name: collections.name,
       description: collections.description,
-      count: sql<number>`(select count(*)::int from collection_files cf join files f on f.id=cf.file_id where cf.collection_id=${collections.id} and f.deleted_at is null and f.upload_status='complete')`,
+      count: sql<number>`(select count(*)::int from collection_files cf join files f on f.id=cf.file_id where cf.collection_id=${sql.identifier('collections')}.${sql.identifier('id')} and f.deleted_at is null and f.upload_status='complete' and ${fileAccessSQL(access.sessionId, 'f')})`,
     })
     .from(collections)
     .where(
@@ -359,8 +407,12 @@ export async function folderMutation(
   action: 'rename' | 'move' | 'trash' | 'restore',
   value?: string | null,
 ) {
+  await assertFolderAccess(ownerId, folderId);
+  if (action !== 'rename') await assertTreeAccess(ownerId, folderId);
   await db().transaction(async (tx) => {
     await tx.execute(vaultWriteLock);
+    await assertFolderAccess(ownerId, folderId);
+    if (action !== 'rename') await assertTreeAccess(ownerId, folderId);
     const [folder] = await tx
       .select()
       .from(folders)
@@ -466,6 +518,9 @@ export async function folderMutation(
           ),
         );
     }
+    await tx.execute(
+      sql`update share_links s set revoked_at=now() from files f where s.file_id=f.id and f.owner_id=${ownerId} and s.revoked_at is null and vault_folder_protected(f.folder_id)`,
+    );
     await tx
       .insert(activityEvents)
       .values({ ownerId, eventType: `folder_${action}` });

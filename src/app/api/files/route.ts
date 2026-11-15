@@ -1,3 +1,5 @@
+import { hashPassword } from 'better-auth/crypto';
+import { assertFolderAccess } from '@/lib/folder-access';
 import { splitFileName } from '@/lib/file-name';
 import { workspaceData } from '@/features/files/workspace-query';
 import { vaultWriteLock } from '@/db/lock';
@@ -57,6 +59,7 @@ const mutation = z.discriminatedUnion('operation', [
   }),
   z.object({
     operation: z.literal('folder-create'),
+    password: z.string().min(8).max(128).optional(),
     name,
     parentId: id.nullable().default(null),
     description: z.string().max(2000).default(''),
@@ -161,7 +164,11 @@ export async function POST(request: Request) {
       });
       return { success: true };
     }
-    if (input.operation === 'folder-create')
+    if (input.operation === 'folder-create') {
+      await assertFolderAccess(user.id, input.parentId);
+      const passwordHash = input.password
+        ? await hashPassword(input.password)
+        : null;
       return db().transaction(async (tx) => {
         await tx.execute(vaultWriteLock);
         if (input.parentId) {
@@ -182,11 +189,13 @@ export async function POST(request: Request) {
               'Destination folder is unavailable.',
             );
         }
+        await assertFolderAccess(user.id, input.parentId);
         const [folder] = await tx
           .insert(folders)
           .values({
             ownerId: user.id,
             parentId: input.parentId,
+            passwordHash,
             name: input.name,
             description: input.description,
           })
@@ -194,8 +203,9 @@ export async function POST(request: Request) {
         await tx
           .insert(activityEvents)
           .values({ ownerId: user.id, eventType: 'folder_created' });
-        return folder;
+        return { id: folder.id, name: folder.name };
       });
+    }
     if (input.operation === 'folder-action') {
       if (input.action === 'rename' && !input.name)
         throw new ApiError(400, 'NAME_REQUIRED', 'Enter a folder name.');

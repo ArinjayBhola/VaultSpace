@@ -1,3 +1,4 @@
+import { folderProtected } from './folder-access';
 import {
   createHash,
   createHmac,
@@ -55,7 +56,8 @@ export async function resolveShare(token: string) {
         ))) ||
     !shareValid(row.share.expiresAt, row.share.revokedAt) ||
     row.file.deletedAt ||
-    row.file.uploadStatus !== 'complete'
+    row.file.uploadStatus !== 'complete' ||
+    (await folderProtected(row.file.folderId))
   )
     throw new ApiError(
       404,
