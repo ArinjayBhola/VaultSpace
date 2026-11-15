@@ -7,7 +7,6 @@ import { vaultWriteLock } from '@/db/lock';
 import {
   files,
   processingJobs,
-  pdfPages,
   settings,
   uploads,
   activityEvents,
@@ -132,8 +131,6 @@ async function executeOperation(job: Operation) {
   const body = await object.Body.transformToByteArray();
   const checksum =
     file.checksum || createHash('sha256').update(body).digest('hex');
-  let morePages = false;
-  let status = 'ready';
   let thumbnailKey: string | null = file.thumbnailKey;
   let thumbnailBytes = file.thumbnailBytes;
   let pageCount = file.pageCount;
@@ -191,99 +188,19 @@ async function executeOperation(job: Operation) {
       throw error;
     }
     pageCount = document.numPages;
-    if (pageCount > 2000) {
-      await loading.destroy();
-      throw new Error('Document exceeds the 2000-page processing limit.');
-    }
-    const pages: {
-      fileId: string;
-      pageNumber: number;
-      extractedText: string;
-      extractionStatus: string;
-    }[] = [];
     try {
-      const started = Date.now();
-      const lastPage = Math.min(pageCount, job.nextPage + 9);
-      for (let n = job.nextPage; n <= lastPage; n++) {
-        if (n > job.nextPage && Date.now() - started > 12000) break;
-        const page = await document.getPage(n);
-        if (n === 1) {
-          const thumbnail = await pdfThumbnail(page);
-          thumbnailKey = `derived/${file.id}/thumbnail.webp`;
-          thumbnailBytes = thumbnail.length;
-          await storage.putObject(thumbnailKey, thumbnail, 'image/webp');
-        }
-        const content = await page.getTextContent();
-        const text = content.items
-          .map((item) =>
-            'str' in item
-              ? item.str + ('hasEOL' in item && item.hasEOL ? '\n' : ' ')
-              : '',
-          )
-          .join('');
-        pages.push({
-          fileId: file.id,
-          pageNumber: n,
-          extractedText: text,
-          extractionStatus: text.trim() ? 'complete' : 'ocr_required',
-        });
+      const page = await document.getPage(1);
+      try {
+        const thumbnail = await pdfThumbnail(page);
+        thumbnailKey = `derived/${file.id}/thumbnail.webp`;
+        thumbnailBytes = thumbnail.length;
+        await storage.putObject(thumbnailKey, thumbnail, 'image/webp');
+      } finally {
         page.cleanup();
       }
     } finally {
       await loading.destroy();
     }
-    const nextPage = (pages.at(-1)?.pageNumber ?? job.nextPage - 1) + 1;
-    morePages = nextPage <= pageCount;
-    await db().transaction(async (tx) => {
-      const [fresh] = await tx
-        .select()
-        .from(files)
-        .where(
-          and(
-            eq(files.id, file.id),
-            eq(files.processingVersion, job.generation),
-            sql`${files.deletedAt} is null`,
-          ),
-        )
-        .for('update');
-      if (!fresh) return;
-      if (job.nextPage === 1)
-        await tx.delete(pdfPages).where(eq(pdfPages.fileId, file.id));
-      for (let offset = 0; offset < pages.length; offset += 50)
-        await tx
-          .insert(pdfPages)
-          .values(pages.slice(offset, offset + 50))
-          .onConflictDoUpdate({
-            target: [pdfPages.fileId, pdfPages.pageNumber],
-            set: {
-              extractedText: sql`excluded.extracted_text`,
-              extractionStatus: sql`excluded.extraction_status`,
-            },
-          });
-      await tx
-        .update(processingJobs)
-        .set({ nextPage, updatedAt: new Date() })
-        .where(eq(processingJobs.id, job.id));
-      if (!morePages) {
-        const [text] = await tx
-          .select({
-            found: sql<boolean>`exists(select 1 from pdf_pages where file_id=${file.id} and length(trim(extracted_text))>0)`,
-          })
-          .from(files)
-          .where(eq(files.id, file.id));
-        if (!text?.found) status = 'ocr_required';
-      }
-      await tx
-        .update(files)
-        .set({ pageCount, checksum, thumbnailKey, thumbnailBytes })
-        .where(
-          and(
-            eq(files.id, file.id),
-            eq(files.processingVersion, job.generation),
-            sql`${files.deletedAt} is null`,
-          ),
-        );
-    });
   } else {
     const image = sharp(body, {
       animated: false,
@@ -338,7 +255,7 @@ async function executeOperation(job: Operation) {
         width,
         height,
         pageCount,
-        processingStatus: morePages ? 'processing' : status,
+        processingStatus: 'ready',
         updatedAt: new Date(),
       })
       .where(
@@ -352,27 +269,19 @@ async function executeOperation(job: Operation) {
     await tx
       .update(processingJobs)
       .set({
-        status: morePages
-          ? 'pending'
-          : status === 'ocr_required'
-            ? 'blocked'
-            : 'complete',
-        completedAt: morePages ? null : new Date(),
+        status: 'complete',
+        completedAt: new Date(),
         updatedAt: new Date(),
-        lastError:
-          status === 'ocr_required'
-            ? 'This PDF contains no extractable text. OCR is required and is not configured.'
-            : null,
+        lastError: null,
       })
       .where(eq(processingJobs.id, job.id));
-    if (!morePages)
-      await tx.insert(activityEvents).values({
-        ownerId: file.ownerId,
-        fileId: file.id,
-        eventType: 'processing_completed',
-      });
+    await tx.insert(activityEvents).values({
+      ownerId: file.ownerId,
+      fileId: file.id,
+      eventType: 'processing_completed',
+    });
   });
-  return { status: morePages ? 'processing' : status };
+  return { status: 'ready' };
 }
 
 async function maintenance(ownerId: string, force = false) {

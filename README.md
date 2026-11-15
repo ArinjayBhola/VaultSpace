@@ -23,7 +23,7 @@ Provisioning requires `OWNER_EMAIL`, `OWNER_PASSWORD` (8–128 characters), and 
 
 Until Neon and authentication are configured, protected pages redirect to a configuration-aware login screen. Missing R2 credentials produce a service error; they do not activate local storage. File operations require no third-party job service. No AI provider, model credentials or semantic search are used.
 
-File preparation and cleanup run through authenticated `/api/operations` requests while the owner keeps the app open. There is no external runner, event key or job-service deployment. PDF text extraction is split into at most ten pages per request with a persisted page cursor. Pending work resumes on a later visit; interrupted requests have an expiring database lease. Processing errors remain visible and can be retried.
+File preparation and cleanup run through authenticated `/api/operations` requests while the owner keeps the app open. There is no external runner, event key or job-service deployment. PDF preparation renders only the first-page thumbnail and reads the page count. No document text is extracted or stored. Pending work resumes on a later visit; interrupted requests have an expiring database lease. Processing errors remain visible and can be retried.
 
 
 ## Implemented code paths
@@ -33,7 +33,7 @@ File preparation and cleanup run through authenticated `/api/operations` request
 - Grid/list file browsing with database pagination and sorting; nested folders with cycle checks; rename/description/move/star; virtual collections; bulk file actions.
 - Private previews and range delivery; request-generated image/PDF thumbnails; two-minute owner download signatures.
 - PDF.js reader with page thumbnails, zoom/fit/rotation/fullscreen, browser printing, text selection highlights, notes, bookmarks, and saved page/zoom.
-- PostgreSQL full-text and trigram search; filters and excerpts; ranked filename and PDF text results with page references.
+- Database-backed file-name and file-type search, with server-side filtering, sorting and pagination.
 - High-entropy hashed share tokens; optional scrypt passwords; expiration/revocation; five-minute HttpOnly public access grants; live validated-access counters.
 - Trash, restore, tracked, request-driven permanent object cleanup, empty trash, and opt-in retention policies with confirmation.
 - Paginated owner-only `/activity` history, three-entry overview activity preview, scrollable sidebar and animated transfer/verification feedback.
@@ -56,9 +56,9 @@ These describe implemented integrations, **not successful cloud tests**.
 
 ## Search and operational limits
 
-Search uses PostgreSQL full-text indexes for metadata and extracted PDF text, plus filename trigram matching. Filtering, ranking, sorting and pagination happen in the database. There is no semantic search, model inference, vector storage or AI credential requirement.
+Search matches display names, original file names, extensions and MIME types. Descriptions, folder/collection names and file contents are not searched. Filtering, ranking, sorting and pagination happen in the database. There is no semantic search, model inference, vector storage or AI credential requirement.
 
-The default per-file upload ceiling is 1 GiB, configurable up to the 5 GiB server-side copy ceiling. No total quota exists unless the owner sets one. Request-based preparation is capped at 50 MiB per original and a 2,000-page PDF cap; larger originals remain downloadable and report processing limits. Image-only PDFs report OCR required. No OCR or malware scanner is bundled.
+The default per-file upload ceiling is 1 GiB, configurable up to the 5 GiB server-side copy ceiling. No total quota exists unless the owner sets one. Request-based preparation is capped at 50 MiB per original; larger originals remain downloadable and report processing limits. Scanned PDFs receive thumbnails without any OCR or extraction requirement. No OCR or malware scanner is bundled.
 
 Multipart retries work during the current transfer. A failed whole-file retry starts a new upload; reload/crash resumability and pause/resume are not implemented. Abandoned sessions are cleaned up. Bulk downloads issue at most ten individual browser downloads; there is no archive generator. Browser printing opens the protected original in the browser's PDF viewer.
 
@@ -79,7 +79,7 @@ AI removal migration: `npm run db:migrate` applies `0005_massive_tiger_shark.sql
 
 Sharing details are available from each file menu and in the PDF reader. They show creation/expiry, validated views and recent active viewing sessions; Expire now revokes a link. Active viewers count authorized visible browser tabs seen within 45 seconds, not unique people. Apply migration 0006 with `npm run db:migrate` before using presence tracking.
 
-Desktop navigation can collapse to an icon rail using the toggle beside global search; the preference persists on the device. Mobile navigation continues to open as a full drawer. Preparation history is not shown in Settings. Preview and PDF-text preparation continue in the background, with current status and retry available in file details.
+Desktop navigation can collapse to an icon rail using the toggle beside global search; the preference persists on the device. Mobile navigation continues to open as a full drawer. Preparation history is not shown in Settings. Thumbnail preparation continues while the app is open, with current status and retry available in file details.
 
 Labeled icon actions use shared Radix tooltips on hover and keyboard focus, including selection actions, navigation, PDF tools and modal controls. The sidebar scrollbar is visually hidden while scrolling remains enabled.
 
@@ -90,3 +90,9 @@ Content density changes spacing across file grids/lists, folders, activity and S
 Appearance also includes font family and font size controls with a live preview and reset. Inter, DM Sans and Manrope are bundled locally; System and Georgia use device fonts. Small/default/large/extra-large scale interface typography from 14/15/16/18px base sizes. Choices persist on this browser and affect dialogs/tooltips too. Document content keeps its original formatting; mobile text inputs retain a 16px minimum to avoid focus zoom.
 
 Inngest removal: apply migration 0007 with `npm run db:migrate` to add the PDF page cursor. `npm run dev` now starts Next.js directly. Preparation and automatic retention progress only while the app is open; they are not a hosted scheduler or durable external execution service. Private originals stay downloadable if preparation is paused or exceeds its limits. R2 lifecycle rules remain the offline backstop for abandoned staging objects and multipart uploads.
+
+## Thumbnail-only preparation and typography
+
+Content search and stored PDF extraction have been removed. Migration 0008 drops `pdf_pages`, its text index, and the obsolete page cursor. It also clears obsolete OCR warnings when a thumbnail already exists. The migration is prepared but not automatically applied: stop older app versions before running `npm run db:migrate`, because they still reference the removed table. Originals, thumbnails, annotations, bookmarks and reading progress are retained. The new code can be reviewed against the existing schema before applying cleanup.
+
+Appearance offers 11 locally bundled/system font styles, including humanist Source Sans 3 and handwritten Caveat, Kalam and Patrick Hand, plus eight text sizes from 13px to 22px base. Styled dropdowns select font style and text size, with a live lettering preview; choices apply immediately and persist in this browser.

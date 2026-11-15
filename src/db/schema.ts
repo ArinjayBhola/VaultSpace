@@ -210,19 +210,6 @@ export const uploads = pgTable(
   },
   (t) => [index('uploads_status_expiry').on(t.status, t.expiresAt)],
 );
-export const pdfPages = pgTable(
-  'pdf_pages',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    fileId: uuid('file_id')
-      .notNull()
-      .references(() => files.id, { onDelete: 'cascade' }),
-    pageNumber: integer('page_number').notNull(),
-    extractedText: text('extracted_text').notNull(),
-    extractionStatus: text('extraction_status').notNull(),
-  },
-  (t) => [uniqueIndex('pdf_page_unique').on(t.fileId, t.pageNumber)],
-);
 export const pdfAnnotations = pgTable(
   'pdf_annotations',
   {
@@ -320,7 +307,6 @@ export const processingJobs = pgTable(
     generation: integer('generation').notNull().default(0),
     status: text('status').notNull().default('pending'),
     attempts: integer('attempts').notNull().default(0),
-    nextPage: integer('next_page').notNull().default(1),
     lastError: text('last_error'),
     createdAt: created(),
     updatedAt: updated(),

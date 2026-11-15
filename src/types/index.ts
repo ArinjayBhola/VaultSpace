@@ -16,8 +16,6 @@ export type VaultFile = {
   width: number | null;
   height: number | null;
   hasThumbnail: boolean;
-  excerpt: string;
-  pageReference: number | null;
   relevance: number;
 };
 export type VaultFolder = {

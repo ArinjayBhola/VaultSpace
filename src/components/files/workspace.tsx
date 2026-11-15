@@ -5,8 +5,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Input, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { DatePicker, DateTimePicker } from '@/components/ui/date-picker';
-import { localDateValue, localDateBoundary } from '@/lib/time';
+import { DateTimePicker } from '@/components/ui/date-picker';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -110,7 +109,7 @@ const titles: Record<string, [string, string]> = {
   '/trash': ['Trash', 'A second chance for the things you let go.'],
   '/search': [
     'Search your vault',
-    'Find a file, a thought, or something you remember.',
+    'Find files by name or filter by file type.',
   ],
   '/analytics': ['Storage analytics', 'A clear picture of your private space.'],
   '/settings': ['Settings', 'Make this space your own.'],
@@ -433,9 +432,7 @@ export function Workspace() {
   }
   function open(file: VaultFile) {
     if (file.mimeType === 'application/pdf')
-      router.push(
-        `/documents/${file.id}${file.pageReference ? `?page=${file.pageReference}` : ''}`,
-      );
+      router.push(`/documents/${file.id}`);
     else openAction({ type: 'details', file });
   }
   function fileMenu(file: VaultFile) {
@@ -1378,151 +1375,21 @@ export function Workspace() {
                     <Input
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
-                      placeholder="Names, descriptions, PDF content…"
+                      placeholder="Search by file name or type"
                     />
                   </label>
                   <label className="form-field" style={{ margin: 0 }}>
-                    Min size (MB)
-                    <Input
-                      placeholder="0"
-                      style={{ width: 105 }}
-                      type="number"
-                      min="0"
-                      defaultValue={
-                        params.get('minSize')
-                          ? Number(params.get('minSize')) / 1048576
-                          : ''
-                      }
-                      onBlur={(e) =>
-                        filter(
-                          'minSize',
-                          e.target.value
-                            ? String(Number(e.target.value) * 1048576)
-                            : '',
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="form-field" style={{ margin: 0 }}>
-                    Uploaded after
-                    <DatePicker
-                      aria-label="Uploaded after"
-                      value={
-                        params.get('after')
-                          ? localDateValue(params.get('after') ?? '')
-                          : ''
-                      }
-                      onChange={(e) =>
-                        filter(
-                          'after',
-                          e.target.value
-                            ? localDateBoundary(e.target.value, false)
-                            : '',
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="form-field" style={{ margin: 0 }}>
-                    Max size (MB)
-                    <Input
-                      placeholder="e.g. 50"
-                      style={{ width: 105 }}
-                      type="number"
-                      min="0"
-                      defaultValue={
-                        params.get('maxSize')
-                          ? Number(params.get('maxSize')) / 1048576
-                          : ''
-                      }
-                      onBlur={(e) =>
-                        filter(
-                          'maxSize',
-                          e.target.value
-                            ? String(Number(e.target.value) * 1048576)
-                            : '',
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="form-field" style={{ margin: 0 }}>
-                    Uploaded before
-                    <DatePicker
-                      aria-label="Uploaded before"
-                      value={
-                        params.get('before')
-                          ? localDateValue(params.get('before') ?? '')
-                          : ''
-                      }
-                      onChange={(e) =>
-                        filter(
-                          'before',
-                          e.target.value
-                            ? localDateBoundary(e.target.value, true)
-                            : '',
-                        )
-                      }
-                    />
-                  </label>
-                  {!collectionId && (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => openAction({ type: 'collection-filter' })}
-                    >
-                      <Layers3 size={14} />
-                      {data?.currentCollection?.name ?? 'All collections'}
-                    </button>
-                  )}
-                  {!folderId && (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => openAction({ type: 'folder-filter' })}
-                    >
-                      <Folder size={14} />
-                      {data?.breadcrumbs.at(-1)?.name ?? 'Choose folder'}
-                    </button>
-                  )}
-                  <label
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 7,
-                      fontSize:
-                        'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
-                      paddingBottom: 11,
-                    }}
-                  >
-                    <Input
-                      type="checkbox"
-                      checked={params.get('starred') === 'true'}
-                      onChange={(e) =>
-                        filter('starred', e.target.checked ? 'true' : '')
-                      }
-                    />
-                    Starred only
-                  </label>
-                  <label className="form-field" style={{ margin: 0 }}>
-                    Processing
+                    File type
                     <Select
-                      value={params.get('status') ?? ''}
-                      onChange={(e) => filter('status', e.target.value)}
+                      aria-label="Filter by file type"
+                      value={params.get('type') ?? 'all'}
+                      onChange={(e) => filter('type', e.target.value)}
                     >
-                      <option value="">All statuses</option>
-                      {[
-                        'pending',
-                        'processing',
-                        'ready',
-                        'failed',
-                        'ocr_required',
-                      ].map((s) => (
-                        <option key={s} value={s}>
-                          {s.replaceAll('_', ' ')}
-                        </option>
-                      ))}
+                      <option value="all">All file types</option>
+                      <option value="images">Images</option>
+                      <option value="pdf">PDF documents</option>
                     </Select>
                   </label>
-
                   <button className="btn primary">
                     <Search size={15} />
                     Search
@@ -1872,25 +1739,6 @@ export function Workspace() {
                             <span style={{ margin: '0 6px' }}>·</span>
                             {date(trash ? f.deletedAt : f.createdAt)}
                           </div>
-                          {params.get('q') && f.excerpt && (
-                            <p
-                              className="muted"
-                              style={{
-                                fontSize:
-                                  'max(9px, calc(13px * var(--vault-font-scale, 1)))',
-                                margin: '10px 0 0',
-                                lineHeight: 1.6,
-                              }}
-                            >
-                              <HighlightText
-                                text={f.excerpt.slice(0, 160)}
-                                query={params.get('q') ?? ''}
-                              />
-                              {f.pageReference
-                                ? ` · Page ${f.pageReference}`
-                                : ''}
-                            </p>
-                          )}
                         </div>
                       </motion.article>
                     ))}
@@ -2131,7 +1979,7 @@ export function Workspace() {
             : action?.type === 'delete' ||
                 action?.type === 'empty-trash' ||
                 action?.type === 'folder-delete'
-              ? 'This removes the original, previews, annotations and search index. This cannot be undone.'
+              ? 'This removes the original, previews, and annotations. This cannot be undone.'
               : action?.type === 'folder-trash'
                 ? 'This folder and its active contents will move to trash. You can restore them later.'
                 : action?.type === 'collection-delete'

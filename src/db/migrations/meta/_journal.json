@@ -57,6 +57,13 @@
       "when": 1794677628436,
       "tag": "0007_perfect_morlun",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794715742196,
+      "tag": "0008_natural_valkyrie",
+      "breakpoints": true
     }
   ]
 }

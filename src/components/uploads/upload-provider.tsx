@@ -104,7 +104,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
                 ...item,
                 state: 'Failed',
                 error:
-                  'Upload succeeded. Preview or text preparation failed; retry processing or open file details.',
+                  'Upload succeeded. Thumbnail generation failed; retry processing or open file details.',
                 processing: row.status,
               };
             return { ...item, state: 'Ready', processing: row.status };
@@ -489,7 +489,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
                       <div className="file-subtitle">
                         {item.state === 'Processing'
                           ? item.file.type === 'application/pdf'
-                            ? 'Uploaded - preparing preview and searchable text'
+                            ? 'Uploaded ? generating thumbnail'
                             : 'Uploaded - preparing image preview'
                           : item.state === 'Ready'
                             ? `Ready ? ${item.processing?.replaceAll('_', ' ') ?? 'original available'}`

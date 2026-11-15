@@ -107,3 +107,17 @@ Migration 0007 was applied successfully. Production build (including TypeScript)
 Found the production operations file trace included the PDF.js entry module but omitted its dynamically loaded server worker and rendering assets. Added route-specific file-tracing includes for the legacy worker, standard fonts, CMaps, WASM and ICC profiles, and configured filesystem asset paths for server extraction/rendering. The operations route explicitly uses Node.js. Reader failure copy now refers to preparation and distinguishes the size limit.
 
 Production build (including TypeScript), ESLint and generated artifact inspection passed: the operations trace now includes the worker and all five asset groups. No test files were created or tests run. Vercel runtime logs were not available; this fixes a verified packaging defect, with production retry still requiring verification after deployment.
+
+## Thumbnail-only preparation, simpler search, and appearance refresh
+
+Removed server PDF text extraction, page-text storage code, content snippets/page-reference results and the PDF content-search panel. File search now matches only display/original names, extensions and MIME types with database-side pagination/sorting. The search form offers name and type controls. PDF preparation renders only page one for a thumbnail and records page count; scanned PDFs need no OCR. Original delivery, selection-based highlights, annotations, bookmarks and reading progress remain supported.
+
+Migration 0008 removes the old extracted-text table/index and page cursor, and clears obsolete OCR-only states when thumbnails already exist. It is prepared but NOT applied to the configured database: older deployed app versions still reference the table. New application code can run against the existing schema for review; stop older versions before applying cleanup. Existing extracted text remains stored until migration is applied.
+
+Refined workspace surfaces, sidebar navigation, search controls, file-card selection/hover states, table headers, empty states and settings spacing. Appearance now provides 11 font styles (including humanist Source Sans 3 and handwritten Caveat, Kalam and Patrick Hand), a visual font gallery, eight sizes from 13px to 22px base, a live preview and browser persistence. Fonts are bundled locally. Keyboard focus, touch actions, responsive font cards and reduced-motion behavior are retained.
+
+Production build including TypeScript, standalone typecheck, ESLint and diff whitespace checks passed. No test files were added or tests run; browser behavior and live thumbnail generation have not been verified in this update. No changes were committed or pushed, as requested.
+
+## Typography dropdown revision and release
+
+At the owner's subsequent request, replaced the font-card gallery and size buttons with the existing Radix-based Select controls. All 11 styles and eight sizes remain available, with font-specific option lettering, a live preview, reset, immediate browser persistence and a stacked mobile layout. Removed obsolete gallery styling. Production build including TypeScript, ESLint and whitespace checks passed. No tests were added or run. The owner authorized committing and pushing the accumulated UI and extraction-removal changes. Migration 0008 remains unapplied to the configured database.

@@ -5,6 +5,13 @@ import './design.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/dm-sans';
 import '@fontsource-variable/manrope';
+import '@fontsource-variable/nunito';
+import '@fontsource-variable/source-sans-3';
+import '@fontsource-variable/lora';
+import '@fontsource-variable/caveat';
+import '@fontsource/kalam/400.css';
+import '@fontsource/kalam/700.css';
+import '@fontsource/patrick-hand/400.css';
 export const metadata: Metadata = {
   title: {
     default: 'VAULTSPACE — Your private cloud',

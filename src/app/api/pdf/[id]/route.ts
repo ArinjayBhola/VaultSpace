@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { and, eq, asc, sql } from 'drizzle-orm';
+import { and, eq, asc } from 'drizzle-orm';
 import { db } from '@/db';
 import {
   pdfAnnotations,
   pdfBookmarks,
   pdfReadingProgress,
-  pdfPages,
   activityEvents,
 } from '@/db/schema';
 import { owner, ApiError } from '@/lib/auth';
@@ -19,11 +18,7 @@ export async function GET(request: Request, context: Context) {
     const file = await ownedFile(user.id, id.parse((await context.params).id));
     if (file.mimeType !== 'application/pdf')
       throw new ApiError(400, 'NOT_PDF', 'This file is not a PDF.');
-    const q = z
-      .string()
-      .max(500)
-      .parse(new URL(request.url).searchParams.get('q') ?? '');
-    const [annotations, bookmarks, progress, matches] = await Promise.all([
+    const [annotations, bookmarks, progress] = await Promise.all([
       db()
         .select()
         .from(pdfAnnotations)
@@ -40,22 +35,6 @@ export async function GET(request: Request, context: Context) {
         .select()
         .from(pdfReadingProgress)
         .where(eq(pdfReadingProgress.fileId, file.id)),
-      q
-        ? db()
-            .select({
-              pageNumber: pdfPages.pageNumber,
-              text: sql<string>`substring(${pdfPages.extractedText} from greatest(1,position(lower(${q}) in lower(${pdfPages.extractedText}))-50) for 220)`,
-            })
-            .from(pdfPages)
-            .where(
-              and(
-                eq(pdfPages.fileId, file.id),
-                sql`position(lower(${q}) in lower(${pdfPages.extractedText}))>0`,
-              ),
-            )
-            .orderBy(asc(pdfPages.pageNumber))
-            .limit(100)
-        : Promise.resolve([]),
     ]);
     return {
       file: {
@@ -67,7 +46,6 @@ export async function GET(request: Request, context: Context) {
       annotations,
       bookmarks,
       progress: progress[0] ?? null,
-      matches,
     };
   });
 }

@@ -54,7 +54,7 @@ export function GlobalSearch() {
     if (file)
       router.push(
         file.mimeType === 'application/pdf'
-          ? `/documents/${file.id}${file.pageReference ? `?page=${file.pageReference}` : ''}`
+          ? `/documents/${file.id}`
           : `/search?q=${encodeURIComponent(file.displayName)}`,
       );
     else router.push(`/search?q=${encodeURIComponent(q)}`);
@@ -88,7 +88,7 @@ export function GlobalSearch() {
         aria-activedescendant={
           index >= 0 ? `search-result-${index}` : undefined
         }
-        placeholder="Search your files, folders, and more…"
+        placeholder="Search by file name or type…"
         value={q}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}

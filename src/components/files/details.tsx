@@ -60,15 +60,13 @@ export function FileDetails({
       ? 'Queued'
       : preparing
         ? 'Preparing'
-        : file.processingStatus === 'ocr_required'
-          ? 'Text unavailable'
-          : file.processingStatus === 'password_required'
-            ? 'Password required'
-            : file.processingStatus === 'corrupt_pdf'
-              ? 'Could not read PDF'
-              : file.processingStatus === 'limit_exceeded'
-                ? 'Preparation limit'
-                : 'Needs attention';
+        : file.processingStatus === 'password_required'
+          ? 'Password required'
+          : file.processingStatus === 'corrupt_pdf'
+            ? 'Could not read PDF'
+            : file.processingStatus === 'limit_exceeded'
+              ? 'Preparation limit'
+              : 'Needs attention';
   async function retry() {
     setRetrying(true);
     setRetryError('');
@@ -209,7 +207,7 @@ export function FileDetails({
         aria-live="polite"
       >
         <div className="details-preparation-title">
-          <span>{pdf ? 'Preview & PDF text search' : 'Image preview'}</span>
+          <span>{pdf ? 'PDF thumbnail' : 'Image preview'}</span>
           <span className="details-status">
             {ready ? (
               <Check size={13} />
@@ -226,14 +224,14 @@ export function FileDetails({
         <p>
           {ready
             ? pdf
-              ? 'Your preview and searchable PDF text are ready.'
+              ? 'Your PDF thumbnail is ready.'
               : 'Your image preview is ready.'
             : waiting || preparing
               ? pdf
-                ? 'Preparing the preview and extracting text for ordinary search. Your original is available now.'
+                ? 'Generating a first-page thumbnail. Your original is available now.'
                 : 'Preparing a smaller preview. Your original is available now.'
               : data.processingError ||
-                'The original is available. Retry preparation to generate the preview and searchable text.'}
+                'The original is available. Retry to generate its thumbnail.'}
         </p>
         {!ready && !preparing && (
           <button

@@ -21,7 +21,6 @@ import {
   Bookmark,
   Highlighter,
   StickyNote,
-  Search,
   X,
   Trash2,
   Pencil,
@@ -59,7 +58,6 @@ type PDFData = {
   annotations: Annotation[];
   bookmarks: { id: string; pageNumber: number; label: string }[];
   progress: { pageNumber: number; zoomLevel: number } | null;
-  matches: { pageNumber: number; text: string }[];
 };
 export default function Reader({ id }: { id: string }) {
   const client = useQueryClient();
@@ -80,8 +78,6 @@ export default function Reader({ id }: { id: string }) {
   const [count, setCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [pageProxy, setPageProxy] = useState<PDFPageProxy | null>(null);
-  const [query, setQuery] = useState('');
-  const [search, setSearch] = useState('');
   const [color, setColor] = useState('#fde047');
   const [errorMessage, setErrorMessage] = useState('');
   const [note, setNote] = useState('');
@@ -103,12 +99,7 @@ export default function Reader({ id }: { id: string }) {
   const readingArea = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
   const full = useRef<HTMLDivElement>(null);
-  const { data: results } = useQuery({
-    queryKey: ['pdf-search', id, search],
-    queryFn: () =>
-      api<PDFData>(`/api/pdf/${id}?q=${encodeURIComponent(search)}`),
-    enabled: Boolean(search),
-  });
+
   useEffect(() => {
     if (data && !initialized.current) {
       initialized.current = true;
@@ -297,15 +288,11 @@ export default function Reader({ id }: { id: string }) {
           </Tooltip>
         </div>
       )}
-      {['ocr_required', 'limit_exceeded', 'failed'].includes(
-        data.file.processingStatus,
-      ) && (
+      {['limit_exceeded', 'failed'].includes(data.file.processingStatus) && (
         <div className="notice">
-          {data.file.processingStatus === 'ocr_required'
-            ? 'This document has no extractable text. OCR is required; visual reading and page notes are available.'
-            : data.file.processingStatus === 'limit_exceeded'
-              ? 'This PDF exceeds the preparation size limit. The original remains available.'
-              : 'PDF preparation failed. Retry preparation from file details. The original remains available.'}
+          {data.file.processingStatus === 'limit_exceeded'
+            ? 'This PDF exceeds the preparation size limit. The original remains available.'
+            : 'PDF preparation failed. Retry preparation from file details. The original remains available.'}
         </div>
       )}
       <div className="reader-toolbar card" style={{ padding: 9 }}>
@@ -595,78 +582,6 @@ export default function Reader({ id }: { id: string }) {
             </div>
           </div>
           <aside className="card reader-side" aria-label="Document annotations">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setSearch(query);
-              }}
-            >
-              <label className="form-field" style={{ marginTop: 0 }}>
-                Search in document
-                <div style={{ display: 'flex', gap: 5 }}>
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Find text…"
-                    style={{ width: '100%', minWidth: 0 }}
-                  />
-                  <Tooltip label="Search PDF">
-                    <button className="icon-btn" aria-label="Search PDF">
-                      <Search size={16} />
-                    </button>
-                  </Tooltip>
-                </div>
-              </label>
-            </form>
-            {search && (
-              <section style={{ marginBottom: 20 }}>
-                <h2
-                  style={{
-                    fontSize:
-                      'max(9px, calc(13.5px * var(--vault-font-scale, 1)))',
-                  }}
-                >
-                  Search results · {results?.matches.length ?? '…'} pages
-                </h2>
-                {results?.matches.length === 0 && (
-                  <p
-                    className="muted"
-                    style={{
-                      fontSize:
-                        'max(9px, calc(13px * var(--vault-font-scale, 1)))',
-                    }}
-                  >
-                    No matches in extracted text. Processing may still be
-                    pending.
-                  </p>
-                )}
-                {results?.matches.map((m) => (
-                  <button
-                    key={m.pageNumber}
-                    className="reader-note"
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: 'left',
-                      background: 'var(--bg)',
-                    }}
-                    onClick={() => navigate(m.pageNumber)}
-                  >
-                    <strong>Page {m.pageNumber}</strong>
-                    <p
-                      style={{
-                        fontSize:
-                          'max(9px, calc(13px * var(--vault-font-scale, 1)))',
-                        lineHeight: 1.6,
-                        margin: '5px 0 0',
-                      }}
-                    >
-                      {m.text}
-                    </p>
-                  </button>
-                ))}
-              </section>
-            )}
             <h2
               style={{
                 fontSize: 'max(9px, calc(14.5px * var(--vault-font-scale, 1)))',

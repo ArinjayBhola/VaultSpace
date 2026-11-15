@@ -105,8 +105,9 @@ export async function listFiles(
     conditions.push(sql`${files.createdAt} <= ${input.before}::timestamptz`);
   if (input.status) conditions.push(eq(files.processingStatus, input.status));
   const q = input.q.trim();
-  const lexical = sql`(to_tsvector('english', ${files.displayName} || ' ' || ${files.originalFilename} || ' ' || ${files.description} || ' ' || ${files.extension} || ' ' || ${files.mimeType}) @@ websearch_to_tsquery('english', ${q}) or ${files.displayName} ilike ${'%' + q.replace(/[%_\\]/g, '\\$&') + '%'} or similarity(${files.displayName}, ${q}) > 0.15 or exists(select 1 from pdf_pages p where p.file_id=${files.id} and to_tsvector('english', p.extracted_text) @@ websearch_to_tsquery('english', ${q})) or exists(select 1 from folders d where d.id=${files.folderId} and d.name ilike ${'%' + q.replace(/[%_\\]/g, '\\$&') + '%'}) or exists(select 1 from collection_files cf join collections c on c.id=cf.collection_id where cf.file_id=${files.id} and c.deleted_at is null and c.name ilike ${'%' + q.replace(/[%_\\]/g, '\\$&') + '%'}))`;
-  const lexicalScore = sql`(similarity(${files.displayName},${q}) + ts_rank_cd(to_tsvector('english',${files.displayName}||' '||${files.description}),websearch_to_tsquery('english',${q})) + coalesce((select max(ts_rank_cd(to_tsvector('english',p.extracted_text),websearch_to_tsquery('english',${q}))) from pdf_pages p where p.file_id=${files.id}),0))`;
+  const pattern = '%' + q.replace(/[%_\\]/g, '\\$&') + '%';
+  const lexical = sql`(${files.displayName} ilike ${pattern} or ${files.originalFilename} ilike ${pattern} or ${files.extension} ilike ${pattern} or ${files.mimeType} ilike ${pattern})`;
+  const lexicalScore = sql`(case when lower(${files.displayName})=lower(${q}) then 3 when ${files.displayName} ilike ${pattern} then 2 else 1 end)`;
   if (q) conditions.push(lexical);
   const where = and(...conditions);
   const column =
@@ -124,12 +125,6 @@ export async function listFiles(
     .select({ count: sql<number>`count(*)::int` })
     .from(files)
     .where(where);
-  const excerpt = q
-    ? sql<string>`coalesce((select ts_headline('english',p.extracted_text,websearch_to_tsquery('english',${q}),'MaxWords=25,MinWords=10,StartSel="",StopSel=""') from pdf_pages p where p.file_id=${files.id} and to_tsvector('english',p.extracted_text) @@ websearch_to_tsquery('english',${q}) order by p.page_number limit 1),${files.description})`
-    : sql<string>`${files.description}`;
-  const pageReference = sql<
-    number | null
-  >`(select p.page_number from pdf_pages p where p.file_id=${files.id} and to_tsvector('english',p.extracted_text) @@ websearch_to_tsquery('english',${q}) order by p.page_number limit 1)`;
   const ranking = lexicalScore;
   const rows = await db()
     .select({
@@ -150,8 +145,6 @@ export async function listFiles(
       height: files.height,
       activeShareCount: sql<number>`(select count(*)::int from share_links s where s.file_id=${files.id} and s.revoked_at is null and (s.expires_at is null or s.expires_at>now()))`,
       hasThumbnail: sql<boolean>`${files.thumbnailKey} is not null`,
-      excerpt,
-      pageReference,
       relevance: q ? ranking : sql<number>`0`,
     })
     .from(files)
