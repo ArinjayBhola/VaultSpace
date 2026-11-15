@@ -2,7 +2,15 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { ZoomIn, ZoomOut, RotateCcw, Maximize, Minimize } from 'lucide-react';
-export function ImagePreview({ url, name }: { url: string; name: string }) {
+export function ImagePreview({
+  url,
+  name,
+  onOpen,
+}: {
+  url: string;
+  name: string;
+  onOpen?: () => void;
+}) {
   const root = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
@@ -52,6 +60,24 @@ export function ImagePreview({ url, name }: { url: string; name: string }) {
       );
     }
   }
+  const image = (
+    <img
+      src={url}
+      alt={name}
+      onLoad={(event) =>
+        setNatural({
+          width: event.currentTarget.naturalWidth,
+          height: event.currentTarget.naturalHeight,
+        })
+      }
+      onError={() => setError('Image preview could not load.')}
+      style={
+        natural.width
+          ? { width, height, maxWidth: 'none', maxHeight: 'none' }
+          : { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }
+      }
+    />
+  );
   return (
     <div ref={root} className="image-viewer">
       <div className="preview-tools">
@@ -114,22 +140,18 @@ export function ImagePreview({ url, name }: { url: string; name: string }) {
             height: Math.max(bounds.height, height),
           }}
         >
-          <img
-            src={url}
-            alt={name}
-            onLoad={(event) =>
-              setNatural({
-                width: event.currentTarget.naturalWidth,
-                height: event.currentTarget.naturalHeight,
-              })
-            }
-            onError={() => setError('Image preview could not load.')}
-            style={
-              natural.width
-                ? { width, height, maxWidth: 'none', maxHeight: 'none' }
-                : { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }
-            }
-          />
+          {onOpen ? (
+            <button
+              type="button"
+              className="image-expand-trigger"
+              aria-label={'Expand preview of ' + name}
+              onClick={onOpen}
+            >
+              {image}
+            </button>
+          ) : (
+            image
+          )}
         </div>
       </div>
       {error && (

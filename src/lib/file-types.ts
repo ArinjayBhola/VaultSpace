@@ -77,6 +77,48 @@ export function extensionForMime(mime: string) {
     ''
   );
 }
+// Keep preview availability and rendering on the same capability map.
+export function filePreviewKind(name: string, mime: string) {
+  const extension = extensionForMime(mime) || extensionOf(name);
+  if (rasterTypes.includes(mime)) return 'image';
+  if (mime === 'application/pdf') return 'pdf';
+  if (
+    (mime.startsWith('audio/') || mime.startsWith('video/')) &&
+    safeInline(mime)
+  )
+    return 'media';
+  if (['docx', 'xlsx', 'pptx'].includes(extension)) return 'office';
+  if (
+    mime.startsWith('text/') ||
+    [
+      'json',
+      'xml',
+      'csv',
+      'md',
+      'yaml',
+      'yml',
+      'log',
+      'html',
+      'svg',
+      'js',
+      'ts',
+      'tsx',
+      'jsx',
+      'py',
+      'sql',
+      'css',
+      'sh',
+      'ini',
+      'toml',
+    ].includes(extension)
+  )
+    return 'text';
+  return null;
+}
+export function canPreviewFile(name: string, mime: string, size: number) {
+  const kind = filePreviewKind(name, mime);
+  return kind !== null && (kind !== 'office' || size <= 20 * 1024 * 1024);
+}
 export function typeLabel(extension: string, mime: string) {
   return extension
     ? extension.toUpperCase()

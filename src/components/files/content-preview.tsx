@@ -3,7 +3,11 @@ import type { Entry } from '@zip.js/zip.js';
 import { ImagePreview } from './image-preview';
 import { useEffect, useState } from 'react';
 import { Download, File } from 'lucide-react';
-import { extensionOf, extensionForMime, rasterTypes } from '@/lib/file-types';
+import {
+  extensionOf,
+  extensionForMime,
+  filePreviewKind,
+} from '@/lib/file-types';
 import { bytes } from '@/lib/client';
 import { Select } from '@/components/ui/select';
 type Preview =
@@ -221,6 +225,7 @@ type PreviewProps = {
   name: string;
   mimeType: string;
   size: number;
+  onExpand?: () => void;
 };
 export function ContentPreview(props: PreviewProps) {
   return (
@@ -232,46 +237,31 @@ export function ContentPreview(props: PreviewProps) {
     />
   );
 }
-function ContentPreviewBody({ url, name, mimeType, size }: PreviewProps) {
+function ContentPreviewBody({
+  url,
+  name,
+  mimeType,
+  size,
+  onExpand,
+}: PreviewProps) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState('');
   const [sheet, setSheet] = useState(0);
   const extension = extensionForMime(mimeType) || extensionOf(name);
-  const image = rasterTypes.includes(mimeType);
-  const media = mimeType.startsWith('audio/') || mimeType.startsWith('video/');
+  const kind = filePreviewKind(name, mimeType);
+  const image = kind === 'image';
+  const media = kind === 'media';
   useEffect(() => {
     if (image || media || mimeType === 'application/pdf') return;
     const controller = new AbortController();
     async function load() {
       try {
-        const office = ['docx', 'xlsx', 'pptx'].includes(extension);
+        const office = kind === 'office';
         if (office && size > 20 * 1024 * 1024)
           throw new Error(
             'Office preview is limited to 20 MB. Download the original to view this file.',
           );
-        const text =
-          mimeType.startsWith('text/') ||
-          [
-            'json',
-            'xml',
-            'csv',
-            'md',
-            'yaml',
-            'yml',
-            'log',
-            'html',
-            'svg',
-            'js',
-            'ts',
-            'tsx',
-            'jsx',
-            'py',
-            'sql',
-            'css',
-            'sh',
-            'ini',
-            'toml',
-          ].includes(extension);
+        const text = kind === 'text';
         const limit = office ? 20 * 1024 * 1024 : text ? 512 * 1024 : 1024;
         const response = await fetch(url, {
           signal: controller.signal,
@@ -326,8 +316,8 @@ function ContentPreviewBody({ url, name, mimeType, size }: PreviewProps) {
     }
     void load();
     return () => controller.abort();
-  }, [url, name, mimeType, size, extension, image, media]);
-  if (image) return <ImagePreview url={url} name={name} />;
+  }, [url, name, mimeType, size, extension, image, media, kind]);
+  if (image) return <ImagePreview url={url} name={name} onOpen={onExpand} />;
   if (mimeType === 'application/pdf')
     return <iframe title={name} src={url} className="file-pdf-frame" />;
   if (media)

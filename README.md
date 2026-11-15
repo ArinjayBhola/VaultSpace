@@ -137,3 +137,6 @@ This is application access control, not encryption. Locked contents are excluded
 Migration `0010_goofy_payback` adds nullable folder password hashes, session-bound unlock records and recursive access functions. Run `npm run db:migrate` in other environments before deploying this version. Existing folders remain unprotected.
 
 My files lists the vault root and its folders. Recent lists files across folders, ordered by the most recent open/upload by default, and labels its dates accordingly. Inline rename measures the original label's width, height and font; it starts at the beginning of the base name and preserves the extension. Truncated filenames scroll on hover or keyboard focus, respecting reduced-motion preferences.
+
+
+File cards open the full file workspace. On /files/[id], use Expand preview for supported images, text/JSON, media and modern Office documents within the preview size limit. Images can also be clicked inside their inline preview. Unsupported binaries retain their existing download/byte fallback without an expand action. Edit file updates the name and description on the same page, preserves the extension, and skips unchanged saves.

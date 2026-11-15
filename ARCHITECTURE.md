@@ -48,3 +48,6 @@ Shared dialogs wrap their body in a local React Suspense boundary. First-use dyn
 
 
 UI timestamps use `useDateFormatter`: useSyncExternalStore provides the same server snapshot during SSR and initial hydration, then enables the browser locale and timezone. The shared formatter has an explicit en-US/Asia-Kolkata initial format; it never relies on the server process locale or timezone. Calendar-only dates use UTC date-only formatting to preserve the intended day. No hydration warnings are suppressed.
+
+
+File-page expansion shares its format capability map with ContentPreview, so unsupported binaries have no expand action. Inline previews unmount while the expanded dialog is open to prevent duplicate media playback/fetching. Metadata editing uses the existing authenticated rename operation and extension guard, updates file caches after a successful write, and invalidates dependent queries without navigation.

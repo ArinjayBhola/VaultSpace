@@ -213,3 +213,14 @@ Production build including strict TypeScript passed. Direct formatter verificati
 ## Popup scrollbar appearance
 
 Hidden visible scrollbar tracks on the shared dialog container and its nested scrollable content using standard scrollbar-width and WebKit scrollbar rules. Overflow remains auto, so long popup content stays reachable with wheel, trackpad, touch and keyboard. Added scroll containment to the dialog. CSS formatting/parser and whitespace checks passed. No test files or test suite; browser appearance not verified. Changes remain uncommitted.
+
+
+## File-page expanded previews and metadata editing
+
+Reverted the uncommitted grid/list image-popup change. Cards and menus retain the existing navigation. The expanded preview lives only on /files/[id], through Expand preview or a click on the inline image. A shared capability map drives both rendering and action availability for images, text/JSON/code, supported media containers and modern Office documents (20 MB limit). Unsupported binaries keep their byte/download fallback and do not offer expansion. Office previews retain their simplified read-only rendering limits. PDFs continue to use the dedicated document reader.
+
+Expansion reuses ContentPreview and the authenticated content endpoint inside the shared dialog. The inline viewer unmounts while expanded to avoid duplicate media playback and outstanding text/Office requests. The popup has a bounded responsive viewport, download and close controls. Image fitting, zoom and fullscreen reuse the existing viewer. No new provider, upload behavior, migration or server extraction was added.
+
+Added Edit file on the file workspace for base name and description. Extensions remain read-only; unchanged values skip requests. Runtime name validation, API errors, pending state and an accessible saved message are included. Changes persist through the existing authenticated rename API; file lists/details and related metadata queries update after success. No synthetic timestamps are written to the cache.
+
+Production build including strict TypeScript and ESLint passed. No test files were added and no test suite run. Browser layout, popup and edit interactions remain for manual review. Changes remain uncommitted and unpushed as requested.

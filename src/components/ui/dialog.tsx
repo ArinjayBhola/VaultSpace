@@ -10,12 +10,14 @@ export function Dialog({
   title,
   description,
   children,
+  className = '',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   return (
@@ -23,7 +25,7 @@ export function Dialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="dialog-overlay" />
         <DialogPrimitive.Content
-          className="dialog-content"
+          className={`dialog-content ${className}`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             heading.current?.focus();
