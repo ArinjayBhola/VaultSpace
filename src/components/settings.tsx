@@ -124,7 +124,11 @@ function SettingsForm({ data }: { data: SettingsResponse }) {
     try {
       await task();
       setMessage(success);
-      await client.invalidateQueries();
+      void Promise.all(
+        ['settings', 'analytics', 'upload-policy'].map((key) =>
+          client.invalidateQueries({ queryKey: [key] }),
+        ),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to save.');
     } finally {

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       .parse(
         new URL(request.url).searchParams.get('timezone') || 'Asia/Kolkata',
       );
-    const [totals, distribution, timeline, largest, activity] =
+    const [totals, distribution, timeline, largest, activity, [preferences]] =
       await Promise.all([
         db()
           .select({
@@ -76,11 +76,8 @@ export async function GET(request: Request) {
           .where(eq(activityEvents.ownerId, user.id))
           .orderBy(desc(activityEvents.createdAt))
           .limit(8),
+        db().select().from(settings).where(eq(settings.ownerId, user.id)),
       ]);
-    const [preferences] = await db()
-      .select()
-      .from(settings)
-      .where(eq(settings.ownerId, user.id));
     return {
       timeZone,
       warningReached: preferences?.warningBytes

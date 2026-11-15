@@ -111,7 +111,8 @@ export function Shell({
       api<Analytics>(
         '/api/analytics?timezone=' + encodeURIComponent(userTimeZone()),
       ),
-    refetchInterval: 30000,
+    staleTime: 120000,
+    refetchInterval: 120000,
   });
   async function logout() {
     try {

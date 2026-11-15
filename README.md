@@ -56,6 +56,10 @@ These describe implemented integrations, **not successful cloud tests**.
 
 ## Search and operational limits
 
+File pages hydrate initial owner-scoped results from the server. Autocomplete uses `/api/search/suggestions` (five matches, one application query); workspace reads run concurrently. File metadata stays fresh for one minute, with file/analytics refresh intervals of two minutes and earlier mutation-specific invalidation. Idle operation polling backs off to two minutes and wakes immediately on local upload/cleanup events. Thumbnail responses support private ETag revalidation after authentication; originals and public shares remain non-cacheable.
+
+Vercel functions are configured for Singapore (`sin1`) to match the configured Neon region (`ap-southeast-1`). Deploy this configuration for it to take effect; update it if the production database moves.
+
 Search matches display names, original file names, extensions and MIME types. Descriptions, folder/collection names and file contents are not searched. Filtering, ranking, sorting and pagination happen in the database. There is no semantic search, model inference, vector storage or AI credential requirement.
 
 The default per-file upload ceiling is 1 GiB, configurable up to the 5 GiB server-side copy ceiling. No total quota exists unless the owner sets one. Request-based preparation is capped at 50 MiB per original; larger originals remain downloadable and report processing limits. Scanned PDFs receive thumbnails without any OCR or extraction requirement. No OCR or malware scanner is bundled.

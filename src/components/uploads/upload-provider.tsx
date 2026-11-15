@@ -331,7 +331,11 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       await api('/api/uploads', { action: 'complete', id: session.id });
       update(item.key, { state: 'Processing', speed: 0, uploaded: true });
       window.dispatchEvent(new Event('vault-operations'));
-      await queryClient.invalidateQueries();
+      void Promise.all(
+        ['files', 'analytics', 'activity', 'suggestions'].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] }),
+        ),
+      );
     } catch (e) {
       const cancelled =
         controller.signal.aborted ||
@@ -347,7 +351,11 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
             error: undefined,
             speed: 0,
           });
-          await queryClient.invalidateQueries();
+          void Promise.all(
+            ['files', 'analytics', 'activity', 'suggestions'].map((key) =>
+              queryClient.invalidateQueries({ queryKey: [key] }),
+            ),
+          );
           return;
         } catch {
           /* The original failure remains visible; cancellation below releases a pending session when possible. */

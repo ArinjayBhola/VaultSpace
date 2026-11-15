@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
 'use client';
+import dynamic from 'next/dynamic';
+import { fileQuery } from '@/lib/file-query';
 
 import { PasswordInput } from '@/components/ui/password-input';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -45,22 +47,51 @@ import { api, bytes, date } from '@/lib/client';
 import type { VaultFile, VaultFolder, FileResponse, Collection } from '@/types';
 import { Dialog } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/search/highlight';
-import { CollectionPicker } from '@/components/collections/picker';
-import { CollectionFilePicker } from '@/components/collections/file-picker';
+const CollectionPicker = dynamic(() =>
+  import('@/components/collections/picker').then(
+    (module) => module.CollectionPicker,
+  ),
+);
+const CollectionFilePicker = dynamic(() =>
+  import('@/components/collections/file-picker').then(
+    (module) => module.CollectionFilePicker,
+  ),
+);
 import {
   FilterSummary,
   fileFilterKeys,
 } from '@/components/files/filter-summary';
-import { FileSharing } from '@/components/sharing/file-sharing';
-import { FileDetails } from '@/components/files/details';
-import { FolderDetails } from '@/components/folders/details';
-import { FolderPicker } from '@/components/folders/picker';
+const FileSharing = dynamic(() =>
+  import('@/components/sharing/file-sharing').then(
+    (module) => module.FileSharing,
+  ),
+);
+const FileDetails = dynamic(() =>
+  import('@/components/files/details').then((module) => module.FileDetails),
+);
+const FolderDetails = dynamic(() =>
+  import('@/components/folders/details').then((module) => module.FolderDetails),
+);
+const FolderPicker = dynamic(() =>
+  import('@/components/folders/picker').then((module) => module.FolderPicker),
+);
 import { useUploads } from '@/components/uploads/upload-provider';
 import { Overview } from '@/components/analytics/overview';
-import { Stats, AnalyticsPanels } from '@/components/analytics/dashboard';
-import { Settings } from '@/components/settings';
-import { ActivityHistory } from '@/components/activity';
-import { Shares } from '@/components/shares';
+import { Stats } from '@/components/analytics/stats';
+const AnalyticsPanels = dynamic(() =>
+  import('@/components/analytics/dashboard').then(
+    (module) => module.AnalyticsPanels,
+  ),
+);
+const Settings = dynamic(() =>
+  import('@/components/settings').then((module) => module.Settings),
+);
+const ActivityHistory = dynamic(() =>
+  import('@/components/activity').then((module) => module.ActivityHistory),
+);
+const Shares = dynamic(() =>
+  import('@/components/shares').then((module) => module.Shares),
+);
 type Action = {
   type:
     | 'folder-create'
@@ -150,6 +181,7 @@ export function Workspace() {
   const [expiry, setExpiry] = useState('');
   const [q, setQ] = useState(params.get('q') ?? '');
   const anchor = useRef<number | null>(null);
+  const pendingStars = useRef(new Set<string>());
   useEffect(() => {
     const saved = localStorage.getItem('vault-view');
     if (saved) queueMicrotask(() => setView(saved));
@@ -169,34 +201,18 @@ export function Workspace() {
     }, 350);
     return () => clearTimeout(timer);
   }, [q, queryFromURL, filters, pathname, params, router]);
-  const mode = overview
-    ? 'recent'
-    : trash
-      ? 'trash'
-      : pathname === '/starred'
-        ? 'starred'
-        : pathname === '/documents'
-          ? 'documents'
-          : pathname === '/recent'
-            ? 'recent'
-            : pathname === '/files' || folderId
-              ? 'root'
-              : 'all';
-  const query = new URLSearchParams(params.toString());
-  query.set('view', mode);
-  query.set('limit', overview ? '8' : '24');
-  if (folderId) query.set('folder', folderId);
-  if (collectionId) query.set('collection', collectionId);
-  const key = query.toString();
+  const key = fileQuery(pathname, new URLSearchParams(params.toString()));
   const {
     data,
     isPending,
     error: loadError,
   } = useQuery({
     queryKey: ['files', key],
-    queryFn: () => api<FileResponse>(`/api/files?${key}`),
+    queryFn: ({ signal }) =>
+      api<FileResponse>(`/api/files?${key}`, undefined, 'GET', signal),
     enabled: !special,
-    refetchInterval: trash ? 3000 : 30000,
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
   const hasActiveFilters = fileFilterKeys.some(
     (key) =>
@@ -244,7 +260,8 @@ export function Workspace() {
     : collectionId
       ? (data?.currentCollection?.description ?? 'Files, thoughtfully grouped.')
       : titles[pathname]?.[1];
-  const showFolders = overview || mode === 'root' || trash;
+  const showFolders =
+    overview || new URLSearchParams(key).get('view') === 'root' || trash;
   function filter(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
@@ -284,21 +301,90 @@ export function Workspace() {
     );
     setAction(next);
   }
+  function refreshFileData(
+    keys = [
+      'files',
+      'file-details',
+      'analytics',
+      'activity',
+      'suggestions',
+      'shares',
+    ],
+  ) {
+    return Promise.all(
+      keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+    );
+  }
   async function mutate(body: unknown) {
     const result = await api<{
       followUp?: { delivered: boolean; message: string };
     }>('/api/files', body);
-    if (result.followUp) setNotice(result.followUp.message);
-    window.dispatchEvent(new Event('vault-operations'));
-    await queryClient.invalidateQueries();
+    if (result.followUp) {
+      setNotice(result.followUp.message);
+      window.dispatchEvent(new Event('vault-operations'));
+    }
+    const starOnly =
+      typeof body === 'object' &&
+      body !== null &&
+      'operation' in body &&
+      body.operation === 'bulk' &&
+      'action' in body &&
+      (body.action === 'star' || body.action === 'unstar');
+    void refreshFileData(
+      starOnly ? ['files', 'file-details', 'activity'] : undefined,
+    );
     setSelected([]);
   }
   async function bulk(action: string, ids = selected) {
     setError('');
+    const optimistic = action === 'star' || action === 'unstar';
+    if (optimistic && ids.some((id) => pendingStars.current.has(id))) return;
+    if (optimistic) for (const id of ids) pendingStars.current.add(id);
+    if (optimistic) await queryClient.cancelQueries({ queryKey: ['files'] });
+    const previous = optimistic
+      ? queryClient.getQueriesData<FileResponse>({ queryKey: ['files'] })
+      : [];
+    if (optimistic)
+      queryClient.setQueriesData<FileResponse>(
+        { queryKey: ['files'] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                files: current.files.map((file) =>
+                  ids.includes(file.id)
+                    ? {
+                        ...file,
+                        starredAt:
+                          action === 'star' ? new Date().toISOString() : null,
+                      }
+                    : file,
+                ),
+              }
+            : current,
+      );
     try {
       await mutate({ operation: 'bulk', ids, action });
     } catch (e) {
+      for (const [key, value] of previous)
+        queryClient.setQueryData<FileResponse>(key, (current) =>
+          current
+            ? {
+                ...current,
+                files: current.files.map((file) => {
+                  const original = value?.files.find(
+                    (item) => item.id === file.id,
+                  );
+                  return ids.includes(file.id) && original
+                    ? { ...file, starredAt: original.starredAt }
+                    : file;
+                }),
+              }
+            : current,
+        );
       setError(e instanceof Error ? e.message : 'Action failed.');
+    } finally {
+      if (optimistic) for (const id of ids) pendingStars.current.delete(id);
     }
   }
   async function save(e: React.FormEvent) {
@@ -383,7 +469,7 @@ export function Workspace() {
           action: 'revoke-file',
           fileId: action.file?.id,
         });
-        await queryClient.invalidateQueries();
+        void refreshFileData();
         setNotice(
           'Sharing revoked. Existing share links can no longer authorize access.',
         );
@@ -396,7 +482,7 @@ export function Workspace() {
           password: password || null,
         });
         setShareUrl(result.url);
-        await queryClient.invalidateQueries();
+        void refreshFileData();
         return;
       }
       setAction(null);
@@ -799,10 +885,7 @@ export function Workspace() {
           {loadError && (
             <div className="notice error" role="alert">
               {loadError.message}
-              <button
-                className="btn"
-                onClick={() => void queryClient.invalidateQueries()}
-              >
+              <button className="btn" onClick={() => void refreshFileData()}>
                 Retry
               </button>
             </div>
@@ -1996,7 +2079,7 @@ export function Workspace() {
             collectionId={collectionId}
             onDone={() => {
               setAction(null);
-              void queryClient.invalidateQueries();
+              void refreshFileData();
             }}
           />
         ) : action?.type === 'folder-details' && action.folder ? (

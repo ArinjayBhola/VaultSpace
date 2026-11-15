@@ -121,44 +121,46 @@ export async function listFiles(
           size: files.sizeBytes,
           type: files.mimeType,
         }[input.sort];
-  const [{ count }] = await db()
-    .select({ count: sql<number>`count(*)::int` })
-    .from(files)
-    .where(where);
   const ranking = lexicalScore;
-  const rows = await db()
-    .select({
-      id: files.id,
-      folderId: files.folderId,
-      displayName: files.displayName,
-      originalFilename: files.originalFilename,
-      mimeType: files.mimeType,
-      sizeBytes: files.sizeBytes,
-      createdAt: files.createdAt,
-      updatedAt: files.updatedAt,
-      deletedAt: files.deletedAt,
-      starredAt: files.starredAt,
-      processingStatus: files.processingStatus,
-      description: files.description,
-      pageCount: files.pageCount,
-      width: files.width,
-      height: files.height,
-      activeShareCount: sql<number>`(select count(*)::int from share_links s where s.file_id=${files.id} and s.revoked_at is null and (s.expires_at is null or s.expires_at>now()))`,
-      hasThumbnail: sql<boolean>`${files.thumbnailKey} is not null`,
-      relevance: q ? ranking : sql<number>`0`,
-    })
-    .from(files)
-    .where(where)
-    .orderBy(
-      q && input.sort === 'relevance'
-        ? desc(ranking)
-        : input.direction === 'asc'
-          ? asc(column)
-          : desc(column),
-      desc(files.id),
-    )
-    .limit(input.limit)
-    .offset((input.page - 1) * input.limit);
+  const [[{ count }], rows] = await Promise.all([
+    db()
+      .select({ count: sql<number>`count(*)::int` })
+      .from(files)
+      .where(where),
+    db()
+      .select({
+        id: files.id,
+        folderId: files.folderId,
+        displayName: files.displayName,
+        originalFilename: files.originalFilename,
+        mimeType: files.mimeType,
+        sizeBytes: files.sizeBytes,
+        createdAt: files.createdAt,
+        updatedAt: files.updatedAt,
+        deletedAt: files.deletedAt,
+        starredAt: files.starredAt,
+        processingStatus: files.processingStatus,
+        description: files.description,
+        pageCount: files.pageCount,
+        width: files.width,
+        height: files.height,
+        activeShareCount: sql<number>`(select count(*)::int from share_links s where s.file_id=${files.id} and s.revoked_at is null and (s.expires_at is null or s.expires_at>now()))`,
+        hasThumbnail: sql<boolean>`${files.thumbnailKey} is not null`,
+        relevance: q ? ranking : sql<number>`0`,
+      })
+      .from(files)
+      .where(where)
+      .orderBy(
+        q && input.sort === 'relevance'
+          ? desc(ranking)
+          : input.direction === 'asc'
+            ? asc(column)
+            : desc(column),
+        desc(files.id),
+      )
+      .limit(input.limit)
+      .offset((input.page - 1) * input.limit),
+  ]);
   return {
     files: rows,
     count,

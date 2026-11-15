@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { headers } from 'next/headers';
@@ -47,7 +48,7 @@ function createAuth() {
     },
   });
 }
-export async function owner() {
+export const owner = cache(async () => {
   const requestHeaders = await headers();
   if (!requestHeaders.get('cookie'))
     throw new ApiError(401, 'UNAUTHORIZED', 'Please sign in to continue.');
@@ -55,7 +56,7 @@ export async function owner() {
   if (!result)
     throw new ApiError(401, 'UNAUTHORIZED', 'Please sign in to continue.');
   return result.user;
-}
+});
 export async function pageOwner() {
   if (!process.env.DATABASE_URL || !process.env.BETTER_AUTH_SECRET)
     redirect('/login');

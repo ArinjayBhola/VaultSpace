@@ -121,3 +121,13 @@ Production build including TypeScript, standalone typecheck, ESLint and diff whi
 ## Typography dropdown revision and release
 
 At the owner's subsequent request, replaced the font-card gallery and size buttons with the existing Radix-based Select controls. All 11 styles and eight sizes remain available, with font-specific option lettering, a live preview, reset, immediate browser persistence and a stacked mobile layout. Removed obsolete gallery styling. Production build including TypeScript, ESLint and whitespace checks passed. No tests were added or run. The owner authorized committing and pushing the accumulated UI and extraction-removal changes. Migration 0008 remains unapplied to the configured database.
+
+## Performance improvements
+
+Configured Vercel sin1 to match the locally configured Singapore Neon region. This changes live execution only after redeployment; production latency improvement is not yet measured. File-list counts/results and workspace metadata queries now run concurrently. Autocomplete has a dedicated authenticated five-result endpoint using one application query rather than six workspace queries plus authentication. Browser fetch cancellation is propagated for suggestions and file requests.
+
+Initial file results are fetched server-side and hydrated with a request-local QueryClient; server/client share query keys and ISO date serialization. Authentication memoization remains scoped to one React render, with no cross-request session cache. Optional screens/dialogs and full analytics split from core file browsing. The existing build artifact comparison showed initial dashboard entry scripts decrease from approximately 187 KiB gzip to 178 KiB; this is a local build-size comparison, not an end-user timing benchmark.
+
+Files and analytics refresh every two minutes instead of frequent polling; operations back off from 15 seconds to two minutes while idle and wake immediately on local events. Metadata stale time defaults to one minute. Mutations invalidate related keys, stars update optimistically with per-file duplicate protection and rollback, and upload completion does not wait for unrelated refreshes. Private thumbnail ETags permit authenticated 304 responses before R2 fetches; originals/public shares retain no-store. Fonts and deep offset pagination remain future optimization areas.
+
+Production build including TypeScript and ESLint passed. No tests were added or run; authenticated browser workflows and post-deployment latency remain unmeasured. No new schema migration is required. Prior migration 0008 was successfully applied and verified at the owner's intervening request. Performance edits remain local and uncommitted.

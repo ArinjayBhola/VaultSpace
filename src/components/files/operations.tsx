@@ -36,6 +36,7 @@ export function FileOperations() {
     let stopped = false;
     let running = false;
     let requested = false;
+    let idleDelay = 15000;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = (delay: number) => {
       if (stopped) return;
@@ -69,7 +70,11 @@ export function FileOperations() {
             ].map((key) => client.invalidateQueries({ queryKey: [key] })),
           );
         }
-        delay = result.remaining ? (result.changed ? 700 : 5000) : 15000;
+        idleDelay =
+          result.remaining || result.changed
+            ? 15000
+            : Math.min(idleDelay * 2, 120000);
+        delay = result.remaining ? (result.changed ? 700 : 5000) : idleDelay;
       } catch (cause) {
         if (!stopped)
           setError(
@@ -90,6 +95,7 @@ export function FileOperations() {
     }
     const resume = () => {
       if (document.visibilityState === 'visible') {
+        idleDelay = 15000;
         if (running) requested = true;
         else schedule(0);
       }

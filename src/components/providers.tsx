@@ -9,7 +9,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { retry: 1, staleTime: 15000 } },
+        defaultOptions: { queries: { retry: 1, staleTime: 60000 } },
       }),
   );
   return (

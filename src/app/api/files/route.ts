@@ -1,6 +1,7 @@
+import { workspaceData } from '@/features/files/workspace-query';
 import { vaultWriteLock } from '@/db/lock';
 import { z } from 'zod';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/db';
 import {
   files,
@@ -8,15 +9,11 @@ import {
   collections,
   collectionFiles,
   activityEvents,
-  processingJobs,
 } from '@/db/schema';
 import { owner, ApiError } from '@/lib/auth';
 import { respond, originGuard, readJSON } from '@/lib/api';
 import { searchFilters, id, name } from '@/lib/validation';
 import {
-  listFiles,
-  listFolders,
-  listCollections,
   mutateFiles,
   folderMutation,
   ownedFile,
@@ -28,89 +25,7 @@ export async function GET(request: Request) {
     const user = await owner();
     const params = new URL(request.url).searchParams;
     const query = searchFilters.parse(Object.fromEntries(params));
-    const [data, folderRows, collectionRows] = await Promise.all([
-      listFiles(user.id, query),
-      listFolders(
-        user.id,
-        query.folder ?? null,
-        query.view === 'trash',
-        query.folderPage,
-      ),
-      listCollections(
-        user.id,
-        undefined,
-        query.collectionPage,
-        query.collectionQuery,
-      ),
-    ]);
-    const [folderTotals] = await db()
-      .select({ count: sql<number>`count(*)::int` })
-      .from(folders)
-      .where(
-        and(
-          eq(folders.ownerId, user.id),
-          query.view === 'trash'
-            ? sql`${folders.deletedAt} is not null`
-            : isNull(folders.deletedAt),
-          query.view === 'trash'
-            ? undefined
-            : query.folder
-              ? eq(folders.parentId, query.folder)
-              : isNull(folders.parentId),
-        ),
-      );
-    const [collectionTotals] = await db()
-      .select({ count: sql<number>`count(*)::int` })
-      .from(collections)
-      .where(
-        and(
-          eq(collections.ownerId, user.id),
-          isNull(collections.deletedAt),
-          query.collectionQuery
-            ? sql`${collections.name} ilike ${'%' + query.collectionQuery.replace(/[%_\\]/g, '\\$&') + '%'}`
-            : undefined,
-        ),
-      );
-    let breadcrumbs: { id: string; name: string }[] = [];
-    if (query.folder) {
-      const result = await db().execute<{ id: string; name: string }>(
-        sql`with recursive path as (select id,name,parent_id,0 as depth from folders where id=${query.folder} and owner_id=${user.id} and deleted_at is null union all select f.id,f.name,f.parent_id,p.depth+1 from folders f join path p on f.id=p.parent_id where f.owner_id=${user.id}) select id,name from path order by depth desc`,
-      );
-      breadcrumbs = result.rows;
-    }
-    return {
-      cleanup:
-        query.view === 'trash'
-          ? {
-              available: true,
-              failed:
-                (
-                  await db()
-                    .select({ id: processingJobs.id })
-                    .from(processingJobs)
-                    .innerJoin(files, eq(files.id, processingJobs.fileId))
-                    .where(
-                      and(
-                        eq(files.ownerId, user.id),
-                        eq(processingJobs.jobType, 'delete'),
-                        eq(processingJobs.status, 'failed'),
-                        eq(processingJobs.generation, files.processingVersion),
-                      ),
-                    )
-                    .limit(1)
-                ).length > 0,
-            }
-          : null,
-      currentCollection: query.collection
-        ? ((await listCollections(user.id, query.collection))[0] ?? null)
-        : null,
-      ...data,
-      folders: folderRows,
-      folderCount: folderTotals.count,
-      collections: collectionRows,
-      collectionCount: collectionTotals.count,
-      breadcrumbs,
-    };
+    return workspaceData(user.id, query);
   });
 }
 const mutation = z.discriminatedUnion('operation', [

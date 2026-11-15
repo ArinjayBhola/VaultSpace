@@ -14,7 +14,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { api } from '@/lib/client';
-import type { FileResponse } from '@/types';
+import type { VaultFile } from '@/types';
 export function GlobalSearch() {
   const router = useRouter();
   const [q, setQ] = useState('');
@@ -42,11 +42,19 @@ export function GlobalSearch() {
   }, []);
   const { data, error, isFetching } = useQuery({
     queryKey: ['suggestions', debounced],
-    queryFn: () =>
-      api<FileResponse>(
-        `/api/files?q=${encodeURIComponent(debounced)}&limit=5`,
+    queryFn: ({ signal }) =>
+      api<{
+        files: Pick<
+          VaultFile,
+          'id' | 'displayName' | 'mimeType' | 'sizeBytes'
+        >[];
+      }>(
+        `/api/search/suggestions?q=${encodeURIComponent(debounced)}`,
+        undefined,
+        'GET',
+        signal,
       ),
-    enabled: debounced.length > 1,
+    enabled: open && debounced.length > 1,
   });
   function choose(i: number) {
     const file = data?.files[i];

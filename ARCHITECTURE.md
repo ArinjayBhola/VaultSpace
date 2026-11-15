@@ -1,5 +1,9 @@
 # VAULTSPACE architecture
 
+File pages use a request-local QueryClient and HydrationBoundary for initial results; the same owner-scoped workspace query serves API and server page. Authentication is memoized only within a React server render, preserving database session validation across requests. Independent reads run concurrently. Autocomplete uses a separate bounded query. Optional settings, analytics panels, sharing, activity and dialogs load in separate chunks. Targeted invalidation and optimistic stars with rollback avoid unrelated blocking refreshes.
+
+Owner thumbnails use private revalidated ETags: session/file authorization precedes every conditional 304, with no shared CDN caching. Original bytes and public shares retain no-store policies. File/analytics refresh every two minutes; operation polling backs off while idle and wakes on local events. Vercel region is sin1, matching the configured Singapore Neon database; redeployment is required to change live execution locality.
+
 Next.js App Router on Vercel. Better Auth owns database-backed sessions; public registration is disabled. A provisioning CLI creates the sole user under a transaction and the database enforces a singleton owner. Route handlers authenticate again independently of page layouts. Mutations validate origin and Zod inputs. PostgreSQL/Drizzle is authoritative; no local filesystem persistence.
 
 Neon stores metadata, annotations, settings, job state and search indexes. Private R2 stores originals and derived thumbnails. Browser uploads use short-lived, per-object signatures; finalization independently inspects R2 size and magic bytes. Multipart uploads use signed parts. Upload readiness and asynchronous processing are separate states.

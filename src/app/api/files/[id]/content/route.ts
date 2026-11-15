@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { owner } from '@/lib/auth';
 import { ownedFile } from '@/features/files/service';
 import { id } from '@/lib/validation';
@@ -19,6 +20,37 @@ export async function GET(
     const range = request.headers.get('range');
     if (range && !/^bytes=\d+-\d*$/.test(range))
       return new Response(null, { status: 416 });
+    const etag =
+      thumbnail && file.thumbnailKey
+        ? 'W/"' +
+          createHash('sha256')
+            .update(
+              file.thumbnailKey +
+                ':' +
+                file.thumbnailBytes +
+                ':' +
+                file.processingVersion,
+            )
+            .digest('hex') +
+          '"'
+        : null;
+    const cacheHeaders = new Headers({
+      'Cache-Control': etag ? 'private, no-cache' : 'private, no-store',
+      Vary: 'Cookie',
+    });
+    if (etag) cacheHeaders.set('ETag', etag);
+    // Authentication and current file authorization happen before revalidation.
+    if (
+      etag &&
+      !range &&
+      request.headers
+        .get('if-none-match')
+        ?.split(',')
+        .map((value) => value.trim().replace(/^W\//, ''))
+        .includes(etag.replace(/^W\//, ''))
+    ) {
+      return new Response(null, { status: 304, headers: cacheHeaders });
+    }
     const object = await getObject(
       thumbnail && file.thumbnailKey ? file.thumbnailKey : file.r2ObjectKey,
       range ?? undefined,
@@ -40,10 +72,12 @@ export async function GET(
     const headers = new Headers({
       'Content-Type':
         thumbnail && file.thumbnailKey ? 'image/webp' : file.mimeType,
-      'Cache-Control': 'private, no-store',
+      'Cache-Control': cacheHeaders.get('Cache-Control') ?? 'private, no-store',
+      Vary: 'Cookie',
       'Accept-Ranges': 'bytes',
       'Content-Disposition': `${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.displayName)}`,
     });
+    if (etag) headers.set('ETag', etag);
     if (object.ContentLength !== undefined)
       headers.set('Content-Length', String(object.ContentLength));
     if (object.ContentRange) headers.set('Content-Range', object.ContentRange);
