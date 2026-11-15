@@ -1,6 +1,7 @@
 import { eq, and, sql, desc, lt, inArray } from 'drizzle-orm';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
+import { join, sep } from 'node:path';
 import { db } from '@/db';
 import { vaultWriteLock } from '@/db/lock';
 import {
@@ -140,10 +141,17 @@ async function executeOperation(job: Operation) {
   let height = file.height;
   if (file.mimeType === 'application/pdf') {
     const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const assetDirectory = (name: string) =>
+      join(process.cwd(), 'node_modules', 'pdfjs-dist', name) + sep;
     const loading = getDocument({
       data: body,
       useSystemFonts: true,
       disableFontFace: true,
+      cMapUrl: assetDirectory('cmaps'),
+      cMapPacked: true,
+      standardFontDataUrl: assetDirectory('standard_fonts'),
+      wasmUrl: assetDirectory('wasm'),
+      iccUrl: assetDirectory('iccs'),
     });
     let document;
     try {

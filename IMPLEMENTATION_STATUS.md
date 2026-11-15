@@ -101,3 +101,9 @@ Preserved required file operations as owner-authenticated, origin-checked app re
 Migration 0007 adds the next-page checkpoint to the existing processing-state table; this is recovery state, not an external queue/provider requirement. Maintenance/optional trash retention now run only during owner visits. R2 lifecycle remains the independent cleanup backstop while the app is closed. UI copy no longer refers to provider credentials or a local job runner.
 
 Migration 0007 was applied successfully. Production build (including TypeScript) and ESLint passed after removal. No automated tests were added or run. Live upload/deletion acceptance and browser interaction are not claimed as executed during this removal.
+
+## Vercel PDF preparation packaging
+
+Found the production operations file trace included the PDF.js entry module but omitted its dynamically loaded server worker and rendering assets. Added route-specific file-tracing includes for the legacy worker, standard fonts, CMaps, WASM and ICC profiles, and configured filesystem asset paths for server extraction/rendering. The operations route explicitly uses Node.js. Reader failure copy now refers to preparation and distinguishes the size limit.
+
+Production build (including TypeScript), ESLint and generated artifact inspection passed: the operations trace now includes the worker and all five asset groups. No test files were created or tests run. Vercel runtime logs were not available; this fixes a verified packaging defect, with production retry still requiring verification after deployment.

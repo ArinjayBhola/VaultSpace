@@ -3,6 +3,7 @@ import { owner } from '@/lib/auth';
 import { originGuard, readJSON, respond } from '@/lib/api';
 import { advanceOperations } from '@/features/processing/service';
 export const maxDuration = 120;
+export const runtime = 'nodejs';
 export async function POST(request: Request) {
   return respond(async () => {
     originGuard(request);

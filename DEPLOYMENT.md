@@ -29,6 +29,8 @@ The command uses Better Auth's supported password hashing and a database transac
 12. Put this application in its own repository, or set Vercel's project root to `VAULTSPACE` in a containing repository. Select Next.js and Node.js 24. Build with `npm run build`, install with `npm ci`. `vercel.json` sets those conventions. Runtime secrets belong in Vercel's environment settings, never `NEXT_PUBLIC_*` variables.
 15. Confirm `public/pdf.worker.min.mjs` was copied during build and is served at `/pdf.worker.min.mjs`; it must match the pinned React-PDF/PDF.js version. No CDN worker is used.
 
+The browser worker above is separate from the server preparation worker. `next.config.ts` explicitly includes `pdfjs-dist/legacy/build/pdf.worker.mjs`, CMaps, fonts, WASM and ICC assets in `/api/operations`' file trace. Keep these includes when changing deployment settings; PDF.js dynamically loads these files and automatic dependency tracing can omit them. After deploying this fix, use **Retry** for files whose preparation previously failed.
+
 ## Post-deployment smoke test
 
 - Anonymous page requests redirect to `/login`; anonymous APIs reject access. Public registration must fail even when called directly.

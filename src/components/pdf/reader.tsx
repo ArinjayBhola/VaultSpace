@@ -303,7 +303,9 @@ export default function Reader({ id }: { id: string }) {
         <div className="notice">
           {data.file.processingStatus === 'ocr_required'
             ? 'This document has no extractable text. OCR is required; visual reading and page notes are available.'
-            : 'Background processing needs attention. The original PDF remains available.'}
+            : data.file.processingStatus === 'limit_exceeded'
+              ? 'This PDF exceeds the preparation size limit. The original remains available.'
+              : 'PDF preparation failed. Retry preparation from file details. The original remains available.'}
         </div>
       )}
       <div className="reader-toolbar card" style={{ padding: 9 }}>
