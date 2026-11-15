@@ -1,8 +1,8 @@
-/* eslint-disable @next/next/no-img-element -- Authenticated private file URLs. */
 'use client';
 import type { Entry } from '@zip.js/zip.js';
+import { ImagePreview } from './image-preview';
 import { useEffect, useState } from 'react';
-import { Download, File, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Download, File } from 'lucide-react';
 import { extensionOf, extensionForMime, rasterTypes } from '@/lib/file-types';
 import { bytes } from '@/lib/client';
 import { Select } from '@/components/ui/select';
@@ -235,7 +235,6 @@ export function ContentPreview(props: PreviewProps) {
 function ContentPreviewBody({ url, name, mimeType, size }: PreviewProps) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState('');
-  const [zoom, setZoom] = useState(100);
   const [sheet, setSheet] = useState(0);
   const extension = extensionForMime(mimeType) || extensionOf(name);
   const image = rasterTypes.includes(mimeType);
@@ -328,47 +327,7 @@ function ContentPreviewBody({ url, name, mimeType, size }: PreviewProps) {
     void load();
     return () => controller.abort();
   }, [url, name, mimeType, size, extension, image, media]);
-  if (image)
-    return (
-      <div className="file-image-view">
-        <div className="preview-tools">
-          <button
-            className="icon-btn"
-            title="Zoom out"
-            aria-label="Zoom out"
-            onClick={() => setZoom((value) => Math.max(25, value - 25))}
-          >
-            <ZoomOut size={18} />
-          </button>
-          <span>{zoom}%</span>
-          <button
-            className="icon-btn"
-            title="Zoom in"
-            aria-label="Zoom in"
-            onClick={() => setZoom((value) => Math.min(300, value + 25))}
-          >
-            <ZoomIn size={18} />
-          </button>
-          <button
-            className="icon-btn"
-            title="Reset zoom"
-            aria-label="Reset zoom"
-            onClick={() => setZoom(100)}
-          >
-            <RotateCcw size={17} />
-          </button>
-        </div>
-        <div className="image-stage">
-          <img
-            src={url}
-            alt={name}
-            style={{ width: zoom + '%', maxWidth: 'none' }}
-            onError={() => setError('Image preview could not load.')}
-          />
-        </div>
-        {error && <p role="alert">{error}</p>}
-      </div>
-    );
+  if (image) return <ImagePreview url={url} name={name} />;
   if (mimeType === 'application/pdf')
     return <iframe title={name} src={url} className="file-pdf-frame" />;
   if (media)

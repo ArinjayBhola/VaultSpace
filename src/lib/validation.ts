@@ -36,7 +36,14 @@ export const searchFilters = z.object({
   view: z
     .enum(['all', 'root', 'recent', 'starred', 'documents', 'trash'])
     .default('all'),
-  type: z.string().max(160).default('all'),
+  type: z
+    .preprocess(
+      (value) => (typeof value === 'string' ? [value] : value),
+      z.array(z.string().min(1).max(160)).max(100).default([]),
+    )
+    .transform((values) =>
+      Array.from(new Set(values.filter((value) => value !== 'all'))),
+    ),
   folder: id.optional(),
   collection: id.optional(),
   minSize: z.coerce.number().nonnegative().optional(),

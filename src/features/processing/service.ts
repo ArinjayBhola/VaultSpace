@@ -387,9 +387,7 @@ async function maintenance(ownerId: string, force = false) {
     );
   await db()
     .delete(shareViewers)
-    .where(
-      sql`${shareViewers.lastSeenAt}<now()-interval '2 minutes' or ${shareViewers.expiresAt}<now()`,
-    );
+    .where(sql`${shareViewers.lastSeenAt}<now()-interval '5 minutes'`);
   // Files are removed by durable cleanup first. Remove empty folders from
   // leaves upward; an interrupted pass is safe to repeat next visit.
   for (let pass = 0; pass < 100; pass++) {

@@ -2,12 +2,11 @@
 import Link from 'next/link';
 import { Select } from '@/components/ui/select';
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Link2,
   ShieldCheck,
   LockKeyhole,
-  X,
   Eye,
   Users,
   ArrowUpRight,
@@ -15,7 +14,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { api, date } from '@/lib/client';
-import { Dialog } from '@/components/ui/dialog';
 type Share = {
   url: string | null;
   endedAt: string | null;
@@ -34,7 +32,6 @@ type Share = {
   activeViewers: number;
 };
 export function Shares() {
-  const client = useQueryClient();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('all');
   const { data, error, isPending } = useQuery({
@@ -49,8 +46,6 @@ export function Shares() {
       }>('/api/shares?page=' + page + '&status=' + status),
     refetchInterval: 5000,
   });
-  const [revoke, setRevoke] = useState<Share | null>(null);
-  const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [copied, setCopied] = useState('');
   async function copyLink(share: Share) {
@@ -65,26 +60,9 @@ export function Shares() {
       );
     }
   }
-  async function confirm() {
-    if (!revoke) return;
-    setBusy(true);
-    try {
-      await api('/api/shares', { action: 'revoke', id: revoke.id });
-      await Promise.all(
-        ['shares', 'files', 'file-details', 'activity', 'analytics'].map(
-          (key) => client.invalidateQueries({ queryKey: [key] }),
-        ),
-      );
-      setRevoke(null);
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Revocation failed.');
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <>
-      {actionError && !revoke && (
+      {actionError && (
         <p role="alert" className="notice error">
           {actionError}
         </p>
@@ -287,18 +265,6 @@ export function Shares() {
                           Original URL unavailable for this older link
                         </span>
                       )}
-                      {s.active && (
-                        <button
-                          className="btn danger"
-                          onClick={() => {
-                            setActionError('');
-                            setRevoke(s);
-                          }}
-                        >
-                          <X size={13} />
-                          Revoke
-                        </button>
-                      )}
                     </div>
                     {s.visibleUntil && (
                       <small className="shared-history-until">
@@ -345,36 +311,6 @@ export function Shares() {
           </div>
         </div>
       )}
-      <Dialog
-        open={Boolean(revoke)}
-        onOpenChange={(open) => {
-          if (!open) setRevoke(null);
-        }}
-        title="Revoke this link?"
-        description={`Access to “${revoke?.filename ?? ''}” will stop immediately, including existing file grants.`}
-      >
-        {actionError && (
-          <div className="notice error" role="alert">
-            {actionError}
-          </div>
-        )}
-        <div className="dialog-actions">
-          <button
-            className="btn"
-            onClick={() => setRevoke(null)}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-          <button
-            className="btn danger"
-            onClick={() => void confirm()}
-            disabled={busy}
-          >
-            {busy ? 'Revoking…' : 'Revoke access'}
-          </button>
-        </div>
-      </Dialog>
     </>
   );
 }

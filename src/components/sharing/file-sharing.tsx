@@ -300,9 +300,9 @@ export function FileSharing({
             </div>
           )}
           <p className="sharing-footnote">
-            Active viewers are authorized, visible browser tabs seen in the last
-            45 seconds, not unique people. Views count successful share
-            openings.
+            Active viewers are authorized open tabs with a heartbeat in the last
+            90 seconds, including background tabs, not unique people. Views
+            count successful share openings.
           </p>
           {data && data.count > data.limit && (
             <nav className="activity-pagination" aria-label="Shared-link pages">

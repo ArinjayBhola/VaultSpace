@@ -1,6 +1,7 @@
 import { vaultWriteLock } from '@/db/lock';
 import {
   and,
+  or,
   eq,
   isNull,
   sql,
@@ -87,15 +88,11 @@ export async function listFiles(
   if (input.view === 'starred' || input.starred === 'true')
     conditions.push(isNotNull(files.starredAt));
   if (input.starred === 'false') conditions.push(isNull(files.starredAt));
-  if (input.view === 'documents' || input.type === 'pdf')
+  if (input.view === 'documents')
     conditions.push(eq(files.mimeType, 'application/pdf'));
-  if (input.type === 'images')
-    conditions.push(sql`${files.mimeType} like 'image/%'`);
-  else if (!['all', 'pdf'].includes(input.type))
+  if (input.type.length)
     conditions.push(
-      input.type.startsWith('mime:')
-        ? eq(files.mimeType, input.type.slice(5))
-        : eq(files.extension, input.type),
+      sql`(${or(...input.type.map((type) => (type === 'pdf' ? eq(files.mimeType, 'application/pdf') : type === 'images' ? sql`${files.mimeType} like 'image/%'` : type.startsWith('mime:') ? eq(files.mimeType, type.slice(5)) : eq(files.extension, type))))})`,
     );
   if (input.collection)
     conditions.push(
@@ -150,7 +147,9 @@ export async function listFiles(
         pageCount: files.pageCount,
         width: files.width,
         height: files.height,
-        activeShareCount: sql<number>`(select count(*)::int from share_links s where s.file_id=${files.id} and s.revoked_at is null and (s.expires_at is null or s.expires_at>now()))`,
+        // Column interpolation in single-table projections loses its table
+        // qualifier. Keep the outer file ID qualified inside this subquery.
+        activeShareCount: sql<number>`(select count(*)::int from share_links s where s.file_id=${sql.identifier('files')}.${sql.identifier('id')} and s.revoked_at is null and (s.expires_at is null or s.expires_at>now()))`,
         hasThumbnail: sql<boolean>`${files.thumbnailKey} is not null`,
         relevance: q ? ranking : sql<number>`0`,
       })

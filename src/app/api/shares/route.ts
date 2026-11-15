@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         accessCount: shareLinks.accessCount,
         lastAccessedAt: shareLinks.lastAccessedAt,
         active: sql<boolean>`${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null`,
-        activeViewers: sql<number>`case when ${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null then (select count(*)::int from share_viewers v where v.share_id=${shareLinks.id} and v.last_seen_at>now()-interval '45 seconds' and v.expires_at>now()) else 0 end`,
+        activeViewers: sql<number>`case when ${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null then (select count(*)::int from share_viewers v where v.share_id=${shareLinks.id} and v.last_seen_at>now()-interval '90 seconds' and v.expires_at>now()) else 0 end`,
         protected: sql<boolean>`${shareLinks.passwordHash} is not null`,
       })
       .from(shareLinks)
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
       .select({
         views: sql<number>`coalesce(sum(${shareLinks.accessCount}),0)::int`,
         activeLinks: sql<number>`count(*) filter(where ${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null)::int`,
-        activeViewers: sql<number>`coalesce(sum(case when ${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null then (select count(*) from share_viewers v where v.share_id=${shareLinks.id} and v.last_seen_at>now()-interval '45 seconds' and v.expires_at>now()) else 0 end),0)::int`,
+        activeViewers: sql<number>`coalesce(sum(case when ${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null then (select count(*) from share_viewers v where v.share_id=${shareLinks.id} and v.last_seen_at>now()-interval '90 seconds' and v.expires_at>now()) else 0 end),0)::int`,
       })
       .from(shareLinks)
       .innerJoin(files, eq(files.id, shareLinks.fileId))

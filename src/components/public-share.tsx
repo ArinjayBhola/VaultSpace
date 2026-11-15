@@ -28,7 +28,7 @@ export function PublicShare({ token }: { token: string }) {
   const [presenceError, setPresenceError] = useState('');
   useEffect(() => {
     if (!file) return;
-    const viewerId = crypto.randomUUID();
+    let viewerId = crypto.randomUUID();
     let disposed = false;
     async function presence(active: boolean) {
       try {
@@ -52,19 +52,27 @@ export function PublicShare({ token }: { token: string }) {
           setPresenceError('Live viewer status is temporarily unavailable.');
       }
     }
-    const update = () => void presence(document.visibilityState === 'visible');
+    const update = () => void presence(true);
     update();
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void presence(true);
-    }, 15000);
+      void presence(true);
+    }, 20000);
     const leave = () => void presence(false);
+    const resume = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        viewerId = crypto.randomUUID();
+        update();
+      }
+    };
     document.addEventListener('visibilitychange', update);
     window.addEventListener('pagehide', leave);
+    window.addEventListener('pageshow', resume);
     return () => {
       disposed = true;
       clearInterval(timer);
       document.removeEventListener('visibilitychange', update);
       window.removeEventListener('pagehide', leave);
+      window.removeEventListener('pageshow', resume);
       leave();
     };
   }, [file, token]);

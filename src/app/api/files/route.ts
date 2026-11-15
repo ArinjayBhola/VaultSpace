@@ -1,3 +1,4 @@
+import { splitFileName } from '@/lib/file-name';
 import { workspaceData } from '@/features/files/workspace-query';
 import { vaultWriteLock } from '@/db/lock';
 import { z } from 'zod';
@@ -24,7 +25,10 @@ export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
     const params = new URL(request.url).searchParams;
-    const query = searchFilters.parse(Object.fromEntries(params));
+    const query = searchFilters.parse({
+      ...Object.fromEntries(params),
+      type: params.getAll('type'),
+    });
     return workspaceData(user.id, query);
   });
 }
@@ -124,7 +128,22 @@ export async function POST(request: Request) {
       return result;
     }
     if (input.operation === 'rename') {
-      await ownedFile(user.id, input.id);
+      const file = await ownedFile(user.id, input.id);
+      if (
+        splitFileName(input.name).extension !==
+        splitFileName(file.displayName).extension
+      )
+        throw new ApiError(
+          400,
+          'EXTENSION_LOCKED',
+          'The file extension cannot be changed. Edit only the file name.',
+        );
+      if (
+        input.name === file.displayName &&
+        (input.description === undefined ||
+          input.description === file.description)
+      )
+        return { success: true, changed: false };
       await db().transaction(async (tx) => {
         await tx
           .update(files)

@@ -27,9 +27,24 @@ export function FilterSummary({
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const active = fileFilterKeys.flatMap((key) => {
+  const active = fileFilterKeys.flatMap<{
+    key: string;
+    value: string;
+    label: string;
+  }>((key) => {
+    if (key === 'type')
+      return params
+        .getAll('type')
+        .filter((value) => value && value !== 'all')
+        .map((value) => ({
+          key,
+          value,
+          label: value.startsWith('mime:')
+            ? value.slice(5)
+            : value.toUpperCase(),
+        }));
     const value = params.get(key);
-    if (!value || (key === 'type' && value === 'all')) return [];
+    if (!value) return [];
     const labels: Record<string, string> = {
       q: `Search: ${value}`,
       type:
@@ -47,11 +62,15 @@ export function FilterSummary({
       collection: `Collection: ${collectionName || 'Selected collection'}`,
       status: `Status: ${value.replaceAll('_', ' ')}`,
     };
-    return [{ key, label: labels[key] }];
+    return [{ key, value, label: labels[key] }];
   });
-  function remove(key?: string) {
+  function remove(key?: string, value?: string) {
     const next = new URLSearchParams(params.toString());
-    for (const field of key ? [key] : fileFilterKeys) next.delete(field);
+    if (key === 'type' && value) {
+      const remaining = next.getAll('type').filter((type) => type !== value);
+      next.delete('type');
+      for (const type of remaining) next.append('type', type);
+    } else for (const field of key ? [key] : fileFilterKeys) next.delete(field);
     next.delete('page');
     router.replace(`${pathname}${next.size ? '?' + next.toString() : ''}`);
   }
@@ -60,14 +79,14 @@ export function FilterSummary({
     <div className="filter-summary" aria-label="Active file filters">
       <span className="filter-summary-label">Filtered by</span>
       {active.map((item) => (
-        <Tooltip key={item.key} label={`Remove ${item.label}`}>
+        <Tooltip key={item.key + item.value} label={`Remove ${item.label}`}>
           <button
             type="button"
             className="filter-chip"
-            key={item.key}
+            key={item.key + item.value}
 
             aria-label={`Remove ${item.label}`}
-            onClick={() => remove(item.key)}
+            onClick={() => remove(item.key, item.value)}
           >
             <span>{item.label}</span>
             <X size={12} />

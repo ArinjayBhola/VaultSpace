@@ -46,9 +46,10 @@ export default async function WorkspacePage({
     else if (value !== undefined) search.set(key, value);
   }
   const key = fileQuery(pathname, search);
-  const query = searchFilters.safeParse(
-    Object.fromEntries(new URLSearchParams(key)),
-  );
+  const query = searchFilters.safeParse({
+    ...Object.fromEntries(new URLSearchParams(key)),
+    type: new URLSearchParams(key).getAll('type'),
+  });
   if (!query.success) notFound();
   const user = await pageOwner();
   const client = new QueryClient();

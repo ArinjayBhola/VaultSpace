@@ -1,10 +1,13 @@
 /* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
 'use client';
 import dynamic from 'next/dynamic';
+import { splitFileName, withFileExtension } from '@/lib/file-name';
 import { defaultShareExpiry } from '@/lib/time';
 import { typeLabel, extensionOf } from '@/lib/file-types';
 import { fileQuery } from '@/lib/file-query';
 
+import { FileTypeFilter } from '@/components/files/type-filter';
+import { EditableFileName } from '@/components/files/editable-file-name';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Input, Textarea } from '@/components/ui/input';
@@ -39,7 +42,6 @@ import {
   RotateCcw,
   Search,
   X,
-  SlidersHorizontal,
   Check,
   ShieldCheck,
   ArrowUpRight,
@@ -48,7 +50,6 @@ import {
 import { api, bytes, date } from '@/lib/client';
 import type { VaultFile, VaultFolder, FileResponse, Collection } from '@/types';
 import { Dialog } from '@/components/ui/dialog';
-import { HighlightText } from '@/components/search/highlight';
 const CollectionPicker = dynamic(() =>
   import('@/components/collections/picker').then(
     (module) => module.CollectionPicker,
@@ -176,8 +177,15 @@ export function Workspace() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [menuSide, setMenuSide] = useState<'top' | 'bottom'>('bottom');
+  function preferMenuSide(trigger: HTMLElement) {
+    const rect = trigger.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const top = viewport?.offsetTop ?? 0;
+    const bottom = top + (viewport?.height ?? window.innerHeight);
+    setMenuSide(bottom - rect.bottom >= rect.top - top ? 'bottom' : 'top');
+  }
   const [drag, setDrag] = useState(false);
-  const [filters, setFilters] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [password, setPassword] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -193,7 +201,7 @@ export function Workspace() {
     queueMicrotask(() => setQ(queryFromURL));
   }, [queryFromURL]);
   useEffect(() => {
-    if (!(filters || pathname === '/search') || q === queryFromURL) return;
+    if (overview || special || collectionPage || q === queryFromURL) return;
     const timer = setTimeout(() => {
       const next = new URLSearchParams(params.toString());
       if (q) next.set('q', q);
@@ -202,7 +210,16 @@ export function Workspace() {
       router.replace(pathname + '?' + next.toString());
     }, 350);
     return () => clearTimeout(timer);
-  }, [q, queryFromURL, filters, pathname, params, router]);
+  }, [
+    q,
+    queryFromURL,
+    overview,
+    special,
+    collectionPage,
+    pathname,
+    params,
+    router,
+  ]);
   const key = fileQuery(pathname, new URLSearchParams(params.toString()));
   const {
     data,
@@ -283,7 +300,9 @@ export function Workspace() {
     setPassword('');
     setExpiry(next.type === 'share' ? defaultShareExpiry() : '');
     setName(
-      next.file?.displayName ??
+      (next.type === 'rename' && next.file
+        ? splitFileName(next.file.displayName).baseName
+        : next.file?.displayName) ??
         next.folder?.name ??
         next.collection?.name ??
         '',
@@ -316,6 +335,37 @@ export function Workspace() {
     return Promise.all(
       keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
     );
+  }
+  async function renameFileInline(file: VaultFile, name: string) {
+    if (name === file.displayName) return;
+    await api('/api/files', { operation: 'rename', id: file.id, name });
+    queryClient.setQueriesData<FileResponse>(
+      { queryKey: ['files'] },
+      (current) =>
+        current
+          ? {
+              ...current,
+              files: current.files.map((item) =>
+                item.id === file.id ? { ...item, displayName: name } : item,
+              ),
+            }
+          : current,
+    );
+    queryClient.setQueryData<{
+      file: VaultFile;
+      processingError: string | null;
+    }>(['file-details', file.id], (current) =>
+      current
+        ? { ...current, file: { ...current.file, displayName: name } }
+        : current,
+    );
+    void refreshFileData([
+      'files',
+      'file-details',
+      'suggestions',
+      'shares',
+      'activity',
+    ]);
   }
   async function mutate(body: unknown) {
     const result = await api<{
@@ -420,13 +470,25 @@ export function Workspace() {
         });
       if (action.type === 'collection-create')
         await mutate({ operation: 'collection-create', name, description });
-      if (action.type === 'rename')
-        await mutate({
-          operation: 'rename',
-          id: action.file?.id,
-          name,
-          description,
-        });
+      if (action.type === 'rename' && action.file) {
+        if (!name.trim()) throw new Error('File name cannot be empty.');
+        const nameChanged =
+          name.trim() !==
+          splitFileName(action.file.displayName).baseName.trim();
+        const fullName = nameChanged
+          ? withFileExtension(action.file.displayName, name)
+          : action.file.displayName;
+        if (
+          fullName !== action.file.displayName ||
+          description !== action.file.description
+        )
+          await mutate({
+            operation: 'rename',
+            id: action.file.id,
+            name: fullName,
+            description,
+          });
+      }
       if (action.type === 'move')
         await mutate({
           operation: 'bulk',
@@ -527,7 +589,13 @@ export function Workspace() {
     return (
       <Menu.Root>
         <Tooltip label={`Actions for ${file.displayName}`}>
-          <Menu.Trigger asChild>
+          <Menu.Trigger
+            asChild
+            onPointerDownCapture={(event) =>
+              preferMenuSide(event.currentTarget)
+            }
+            onKeyDownCapture={(event) => preferMenuSide(event.currentTarget)}
+          >
             <button
               className="icon-btn"
               aria-label={`Actions for ${file.displayName}`}
@@ -537,7 +605,15 @@ export function Workspace() {
           </Menu.Trigger>
         </Tooltip>
         <Menu.Portal>
-          <Menu.Content className="menu-content" align="end" sideOffset={5}>
+          <Menu.Content
+            className="menu-content"
+            side={menuSide}
+            align="end"
+            sideOffset={5}
+            avoidCollisions
+            collisionPadding={12}
+            sticky="partial"
+          >
             {trash ? (
               <>
                 <Menu.Item
@@ -942,7 +1018,15 @@ export function Workspace() {
                       <Layers3 size={26} color="#8b5cf6" />
                       <Menu.Root>
                         <Tooltip label={`Actions for ${c.name}`}>
-                          <Menu.Trigger asChild>
+                          <Menu.Trigger
+                            asChild
+                            onPointerDownCapture={(event) =>
+                              preferMenuSide(event.currentTarget)
+                            }
+                            onKeyDownCapture={(event) =>
+                              preferMenuSide(event.currentTarget)
+                            }
+                          >
                             <button
                               className="icon-btn"
                               aria-label={`Actions for ${c.name}`}
@@ -952,7 +1036,15 @@ export function Workspace() {
                           </Menu.Trigger>
                         </Tooltip>
                         <Menu.Portal>
-                          <Menu.Content className="menu-content">
+                          <Menu.Content
+                            className="menu-content"
+                            side={menuSide}
+                            align="end"
+                            sideOffset={5}
+                            avoidCollisions
+                            collisionPadding={12}
+                            sticky="partial"
+                          >
                             <Menu.Item
                               className="menu-item"
                               onSelect={() =>
@@ -1103,7 +1195,15 @@ export function Workspace() {
                           </Link>
                           <Menu.Root>
                             <Tooltip label={`Actions for folder ${f.name}`}>
-                              <Menu.Trigger asChild>
+                              <Menu.Trigger
+                                asChild
+                                onPointerDownCapture={(event) =>
+                                  preferMenuSide(event.currentTarget)
+                                }
+                                onKeyDownCapture={(event) =>
+                                  preferMenuSide(event.currentTarget)
+                                }
+                              >
                                 <button
                                   className="icon-btn"
                                   aria-label={`Actions for folder ${f.name}`}
@@ -1113,7 +1213,15 @@ export function Workspace() {
                               </Menu.Trigger>
                             </Tooltip>
                             <Menu.Portal>
-                              <Menu.Content className="menu-content">
+                              <Menu.Content
+                                className="menu-content"
+                                side={menuSide}
+                                align="end"
+                                sideOffset={5}
+                                avoidCollisions
+                                collisionPadding={12}
+                                sticky="partial"
+                              >
                                 {trash ? (
                                   <>
                                     <Menu.Item
@@ -1321,50 +1429,52 @@ export function Workspace() {
                   <Link className="link" href="/recent">
                     View all →
                   </Link>
-                ) : (
-                  <button
-                    className={`btn filter-toggle ${filters ? 'is-active' : ''}`}
-                    aria-expanded={filters}
-                    aria-controls="file-filters"
-                    style={{
-                      padding: '7px 10px',
-                      fontSize:
-                        'max(9px, calc(13px * var(--vault-font-scale, 1)))',
-                    }}
-                    onClick={() => setFilters(!filters)}
-                  >
-                    <SlidersHorizontal size={13} />
-                    Filters
-                  </button>
-                )}
+                ) : null}
               </div>
               {!overview && (
-                <div className="toolbar file-toolbar">
-                  <div
-                    className="tabs"
-                    role="group"
-                    aria-label="File type filter"
+                <form
+                  className="toolbar file-toolbar"
+                  role="search"
+                  aria-label="Search workspace files"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    filter('q', q);
+                  }}
+                >
+                  <Input
+                    className="file-toolbar-search"
+                    aria-label="Search files"
+                    placeholder="Search by file name or type"
+                    value={q}
+                    onChange={(event) => setQ(event.target.value)}
+                  />
+                  <FileTypeFilter
+                    options={data?.fileTypes ?? []}
+                    value={params.getAll('type')}
+                    onChange={(types) => {
+                      const next = new URLSearchParams(params.toString());
+                      next.delete('type');
+                      next.delete('page');
+                      for (const type of types) next.append('type', type);
+                      router.replace(pathname + '?' + next.toString());
+                      setSelected([]);
+                    }}
+                  />
+                  <button type="submit" className="btn primary">
+                    <Search size={15} />
+                    Search
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setQ('');
+                      router.replace(pathname);
+                      setSelected([]);
+                    }}
                   >
-                    <Select
-                      aria-label="File type filter"
-                      value={params.get('type') ?? 'all'}
-                      onChange={(event) =>
-                        filter(
-                          'type',
-                          event.target.value === 'all'
-                            ? ''
-                            : event.target.value,
-                        )
-                      }
-                    >
-                      <option value="all">All file types</option>
-                      {(data?.fileTypes ?? []).map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label} ({type.count})
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
+                    Clear
+                  </button>
                   <div className="file-toolbar-actions">
                     <Select
                       aria-label="Sort files"
@@ -1398,6 +1508,7 @@ export function Workspace() {
                     >
                       <Tooltip label="Grid view">
                         <button
+                          type="button"
                           className="icon-btn"
                           aria-label="Grid view"
                           aria-pressed={view === 'grid'}
@@ -1415,6 +1526,7 @@ export function Workspace() {
                       </Tooltip>
                       <Tooltip label="List view">
                         <button
+                          type="button"
                           className="icon-btn"
                           aria-label="List view"
                           aria-pressed={view === 'list'}
@@ -1432,68 +1544,8 @@ export function Workspace() {
                       </Tooltip>
                     </div>
                   </div>
-                </div>
-              )}
-              {(filters || pathname === '/search') && (
-                <form
-                  id="file-filters"
-                  className="advanced-filters card"
-                  style={{
-                    padding: 17,
-                    marginBottom: 17,
-                    display: 'flex',
-                    gap: 12,
-                    flexWrap: 'wrap',
-                    alignItems: 'end',
-                  }}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    filter('q', q);
-                  }}
-                >
-                  <label
-                    className="form-field"
-                    style={{ margin: 0, flex: 1, minWidth: 180 }}
-                  >
-                    Search
-                    <Input
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      placeholder="Search by file name or type"
-                    />
-                  </label>
-                  <label className="form-field" style={{ margin: 0 }}>
-                    File type
-                    <Select
-                      aria-label="Filter by file type"
-                      value={params.get('type') ?? 'all'}
-                      onChange={(e) => filter('type', e.target.value)}
-                    >
-                      <option value="all">All file types</option>
-                      {(data?.fileTypes ?? []).map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label} ({type.count})
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-                  <button className="btn primary">
-                    <Search size={15} />
-                    Search
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => {
-                      setQ('');
-                      router.replace(pathname);
-                    }}
-                  >
-                    Clear
-                  </button>
                 </form>
               )}
-
               {!overview && (
                 <FilterSummary
                   collectionName={data?.currentCollection?.name}
@@ -1813,16 +1865,12 @@ export function Workspace() {
                             ) : (
                               <FileText size={14} color="#7aa4d5" />
                             )}
-                            <span
-                              className="file-name"
-                              style={{ flex: 1 }}
-                              title={f.displayName}
-                            >
-                              <HighlightText
-                                text={f.displayName}
-                                query={params.get('q') ?? ''}
-                              />
-                            </span>
+                            <EditableFileName
+                              file={f}
+                              query={params.get('q') ?? ''}
+                              disabled={trash}
+                              onRename={renameFileInline}
+                            />
                             {f.starredAt && (
                               <Star size={12} color="#eab308" fill="#eab308" />
                             )}
@@ -1862,42 +1910,42 @@ export function Workspace() {
                               />
                             </td>
                             <td>
-                              <button
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 12,
-                                  border: 0,
-                                  background: 'transparent',
-                                  textAlign: 'left',
-                                }}
-                                onClick={() => !trash && open(f)}
-                              >
-                                {f.mimeType === 'application/pdf' ? (
-                                  <FileText size={21} color="#e38579" />
-                                ) : f.mimeType.startsWith('image/') ? (
-                                  <ImageIcon size={21} color="#7aa4d5" />
-                                ) : (
-                                  <FileText size={21} color="#7aa4d5" />
-                                )}
-                                <span>
-                                  <HighlightText
-                                    text={f.displayName}
-                                    query={params.get('q') ?? ''}
-                                  />
-                                  {f.starredAt && (
-                                    <Star
-                                      size={11}
-                                      fill="#eab308"
-                                      color="#eab308"
-                                      style={{
-                                        display: 'inline',
-                                        marginLeft: 7,
-                                      }}
+                              <div className="file-list-name">
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  disabled={trash}
+                                  aria-label={'Open ' + f.displayName}
+                                  title="Open file"
+                                  onClick={() => open(f)}
+                                >
+                                  {f.mimeType.startsWith('image/') ? (
+                                    <ImageIcon size={21} color="#7aa4d5" />
+                                  ) : (
+                                    <FileText
+                                      size={21}
+                                      color={
+                                        f.mimeType === 'application/pdf'
+                                          ? '#e38579'
+                                          : '#7aa4d5'
+                                      }
                                     />
                                   )}
-                                </span>
-                              </button>
+                                </button>
+                                <EditableFileName
+                                  file={f}
+                                  query={params.get('q') ?? ''}
+                                  disabled={trash}
+                                  onRename={renameFileInline}
+                                />
+                                {f.starredAt && (
+                                  <Star
+                                    size={11}
+                                    fill="#eab308"
+                                    color="#eab308"
+                                  />
+                                )}
+                              </div>
                             </td>
                             <td className="muted">{bytes(f.sizeBytes)}</td>
                             <td className="muted">
@@ -2004,7 +2052,7 @@ export function Workspace() {
                   </div>
                 </div>
               )}
-              {!trash && !collectionId && !collectionPage && (
+              {overview && (
                 <div className={`dropzone ${drag ? 'drag' : ''}`}>
                   <span
                     className="stat-icon"
@@ -2048,7 +2096,7 @@ export function Workspace() {
                       >
                         browse files
                       </button>{' '}
-                      to upload · Images & PDFs
+                      to upload · Any file type
                     </div>
                   </div>
                   <ShieldCheck
@@ -2123,20 +2171,42 @@ export function Workspace() {
                 <>
                   <label className="form-field">
                     Name
-                    <Input
-                      placeholder={
-                        action?.type.startsWith('folder')
-                          ? 'e.g. Personal documents'
-                          : action?.type.startsWith('collection')
-                            ? 'e.g. Design references'
-                            : 'Enter a file name'
+                    <div
+                      className={
+                        action.type === 'rename' ? 'file-name-field' : undefined
                       }
-                      autoFocus
-                      required
-                      maxLength={240}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
+                    >
+                      <Input
+                        placeholder={
+                          action?.type.startsWith('folder')
+                            ? 'e.g. Personal documents'
+                            : action?.type.startsWith('collection')
+                              ? 'e.g. Design references'
+                              : 'Enter a file name'
+                        }
+                        autoFocus
+                        required
+                        maxLength={
+                          240 -
+                          (action.type === 'rename' && action.file
+                            ? splitFileName(action.file.displayName).extension
+                                .length
+                            : 0)
+                        }
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                      {action.type === 'rename' &&
+                        action.file &&
+                        splitFileName(action.file.displayName).extension && (
+                          <span
+                            className="locked-file-extension"
+                            title="File extension cannot be changed"
+                          >
+                            {splitFileName(action.file.displayName).extension}
+                          </span>
+                        )}
+                    </div>
                   </label>
                   {!action.type.startsWith('folder-rename') && (
                     <label className="form-field">

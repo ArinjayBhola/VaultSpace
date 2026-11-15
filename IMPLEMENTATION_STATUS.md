@@ -151,3 +151,33 @@ Share creation rejects existing active links under the transaction write lock. M
 New raw token URLs are recoverable with a domain-separated HMAC based on a random UUID and server secret; only hashes persist. Older random-token links are supported with versioned signed aliases bound to the existing record/hash. Original URLs remain unchanged and all aliases share the same access controls/counters; no second active share is created. Secret rotation changes signed aliases; owner management can regenerate them.
 
 Production build including TypeScript, ESLint and diff checks passed before final documentation updates; final synchronization follows. No test files were added or tests run. Authenticated browser workflows/concurrency load tests were not executed. This release also includes the previously pending general-file uploads, previews, dynamic filters and default share expiry changes.
+
+## Correct active-share counts and remove /shared revoke action
+
+Identified the repeated file-menu bug in generated SQL: Drizzle single-table projection rewriting removed the outer files qualifier inside the correlated share-count subquery, so s.file_id compared against the inner share row id. Replaced the outer reference with explicit SQL identifiers so the generated query uses files.id. Existing menu logic can now show Revoke link from authoritative state.
+
+Removed the Revoke button, its dialog and mutation handler from the /shared overview, retaining Open/Copy. Revocation remains available through file menus and file-level management. Read-only verification compared the file-list service to an independently joined aggregate: one visible file, one with an active link, zero mismatches. Build including TypeScript, ESLint and whitespace checks passed. No test files were added or test suite run; browser interaction was not executed. No database writes were performed. Changes remain uncommitted and unpushed as requested.
+
+## Inline file-name editing
+
+Added a shared editable-name component to grid and list views. Double-click enters a focused selected input; blur/Enter saves, Escape cancels, and Enter/F2 provides keyboard access. The list file icon retains the open-file action so the first click does not navigate before a double-click can edit the name. Trashed-file names remain noneditable.
+
+Uses the existing authenticated, validated rename API, leaves description untouched, and updates file/detail caches after successful persistence before targeted background invalidation. Unchanged names skip requests; invalid names and request failures return to the original label with an inline error. A submission guard prevents duplicate blur/Enter saves. No schema change or test files. Production build passed; final strict typecheck and ESLint passed after small validation/focus refinements. Browser interactions have not been executed. All changes, including the preceding share-menu fix, remain local and uncommitted.
+
+## Locked rename extensions, unchanged-save guards and menu layout
+
+Added shared base-name/extension helpers. Inline and modal rename edit only the base name, with an immutable suffix outside the input and an adjusted length limit. Inline unchanged/whitespace-only edits skip requests; modal saves skip requests unless the base name or description changed. The API also rejects extension changes and returns early for unchanged metadata, avoiding update timestamps and activity writes.
+
+Removed thumbnail inset padding while retaining contain sizing so one axis fills its preview. File/folder/collection action triggers measure available viewport space on pointer/keyboard opening and prefer top or bottom accordingly; Radix collision handling remains enabled. Action menu height uses its available-space variable plus a 440px cap, with internal scrolling and scroll containment.
+
+Production build including TypeScript, ESLint and whitespace checks passed. No test files were added or tests run; browser layout/interaction remains for visual review. No database migrations or live file writes. Changes remain uncommitted and unpushed, together with prior local fixes.
+
+## Fit-to-view images, live sessions and unified multi-type search
+
+Replaced width-based 100% image sizing with a shared image viewer that measures natural image dimensions and the actual available viewport. Default/reset fit both axes; zoom reflects the actual scale. View full uses native fullscreen (original-image fallback where unavailable). Owner/public previews share this behavior. Inline edit hides the extension while preserving it for saves; input typography/height match the normal file label.
+
+Removed the Filters toggle and secondary search card. One toolbar now holds search, clear, sort/view controls and a checkbox multi-type menu. Repeated type URL values survive parsing, SSR hydration and stable cache keys, then combine through parameterized OR predicates. Type chips remove individual selections. The footer upload banner renders only on /. Read-only verification used one stored type plus a second filter value: both survived parsing/query-key construction and the service count matched an independent database predicate.
+
+Presence no longer deletes a session when the shared tab becomes hidden. Valid open pages heartbeat every 20 seconds; counts require a real heartbeat within 90 seconds. Page close/unmount creates a closed-session tombstone; late updates cannot revive it. BFCache restoration uses a new viewer ID. Maintenance removes sessions after five minutes without a heartbeat. This measures recently connected authorized shared-page sessions, not unique people or attention.
+
+Production build including TypeScript, ESLint and read-only filter checks passed. No test files were added or test suite run; browser/fullscreen/presence interaction still requires visual review. No migration or live file mutations were performed. Changes remain local and uncommitted along with prior fixes.

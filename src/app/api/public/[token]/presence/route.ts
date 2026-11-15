@@ -46,21 +46,27 @@ export async function POST(
         'Viewer updates are temporarily limited.',
       );
     if (!input.active) {
+      // Retain a closed-session tombstone so an older in-flight heartbeat
+      // cannot recreate the viewer after the page is closed.
       await db()
-        .delete(shareViewers)
-        .where(
-          and(
-            eq(shareViewers.shareId, row.share.id),
-            eq(shareViewers.viewerHash, viewerHash),
-          ),
-        );
+        .insert(shareViewers)
+        .values({
+          shareId: row.share.id,
+          viewerHash,
+          expiresAt: new Date(0),
+          lastSeenAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [shareViewers.shareId, shareViewers.viewerHash],
+          set: { expiresAt: new Date(0), lastSeenAt: new Date() },
+        });
       return { active: false };
     }
     const expiry = Date.now() + 5 * 60000;
     const expiresAt = new Date(
       Math.min(expiry, row.share.expiresAt?.getTime() ?? expiry),
     );
-    await db().transaction(async (tx) => {
+    const active = await db().transaction(async (tx) => {
       const [current] = await tx
         .select({ id: shareLinks.id })
         .from(shareLinks)
@@ -77,7 +83,7 @@ export async function POST(
           'SHARE_UNAVAILABLE',
           'This share is no longer available.',
         );
-      await tx
+      const viewers = await tx
         .insert(shareViewers)
         .values({
           shareId: row.share.id,
@@ -88,8 +94,12 @@ export async function POST(
         .onConflictDoUpdate({
           target: [shareViewers.shareId, shareViewers.viewerHash],
           set: { lastSeenAt: new Date(), expiresAt },
-        });
+          setWhere: sql`${shareViewers.expiresAt}>to_timestamp(0)`,
+        })
+        .returning({ viewerHash: shareViewers.viewerHash });
+      return viewers.length > 0;
     });
+    if (!active) return { active: false };
     (await cookies()).set(`share_${row.share.id}`, createGrant(row.share.id), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
