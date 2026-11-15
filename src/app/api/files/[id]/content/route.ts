@@ -1,3 +1,4 @@
+import { safeInline } from '@/lib/file-types';
 import { createHash } from 'node:crypto';
 import { owner } from '@/lib/auth';
 import { ownedFile } from '@/features/files/service';
@@ -75,7 +76,7 @@ export async function GET(
       'Cache-Control': cacheHeaders.get('Cache-Control') ?? 'private, no-store',
       Vary: 'Cookie',
       'Accept-Ranges': 'bytes',
-      'Content-Disposition': `${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.displayName)}`,
+      'Content-Disposition': `${url.searchParams.get('download') === '1' || (!thumbnail && !safeInline(file.mimeType)) ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.displayName)}`,
     });
     if (etag) headers.set('ETag', etag);
     if (object.ContentLength !== undefined)

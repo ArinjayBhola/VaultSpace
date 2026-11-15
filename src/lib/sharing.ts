@@ -25,15 +25,34 @@ export function checkSharePassword(password: string, stored: string) {
   );
 }
 export async function resolveShare(token: string) {
-  if (!/^[a-f0-9]{64}$/.test(token))
+  const alias =
+    /^v1\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.([a-f0-9]{64})$/.exec(
+      token,
+    );
+  const aliasId = alias?.[1];
+  const aliasSignature = alias?.[2];
+  if (!/^[a-f0-9]{64}$/.test(token) && (!aliasId || !aliasSignature))
     throw new ApiError(404, 'NOT_FOUND', 'This share is unavailable.');
   const [row] = await db()
     .select({ share: shareLinks, file: files })
     .from(shareLinks)
     .innerJoin(files, eq(files.id, shareLinks.fileId))
-    .where(eq(shareLinks.tokenHash, tokenHash(token)));
+    .where(
+      aliasId
+        ? eq(shareLinks.id, aliasId)
+        : eq(shareLinks.tokenHash, tokenHash(token)),
+    );
   if (
     !row ||
+    (aliasId &&
+      (!aliasSignature ||
+        !timingSafeEqual(
+          Buffer.from(aliasSignature, 'hex'),
+          Buffer.from(
+            aliasSignatureFor(row.share.id, row.share.tokenHash),
+            'hex',
+          ),
+        ))) ||
     !shareValid(row.share.expiresAt, row.share.revokedAt) ||
     row.file.deletedAt ||
     row.file.uploadStatus !== 'complete'
@@ -90,4 +109,30 @@ export async function throttleShare(shareId: string) {
       'RATE_LIMITED',
       'Too many attempts. Try again in a minute.',
     );
+}
+
+// URLs can be recovered for the owner without plaintext token storage.
+// A signed alias is bound to the same share ID and token hash: it shares the
+// original password, expiry, revocation, throttle and access counters.
+export function shareToken(shareId: string) {
+  return createHmac('sha256', secret())
+    .update('vaultspace/share-url/v1:' + shareId)
+    .digest('hex');
+}
+function aliasSignatureFor(shareId: string, storedHash: string) {
+  return createHmac('sha256', secret())
+    .update('vaultspace/share-alias/v1:' + shareId + ':' + storedHash)
+    .digest('hex');
+}
+export function ownerShareUrl(shareId: string, storedHash: string) {
+  if (!/^[a-f0-9]{64}$/.test(storedHash)) return null;
+  const token = shareToken(shareId);
+  const originalAvailable = timingSafeEqual(
+    Buffer.from(tokenHash(token), 'hex'),
+    Buffer.from(storedHash, 'hex'),
+  );
+  const publicToken = originalAvailable
+    ? token
+    : 'v1.' + shareId + '.' + aliasSignatureFor(shareId, storedHash);
+  return new URL('/s/' + publicToken, process.env.BETTER_AUTH_URL).href;
 }

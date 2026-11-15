@@ -1,5 +1,15 @@
-/* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
 'use client';
+import dynamic from 'next/dynamic';
+const ContentPreview = dynamic(
+  () =>
+    import('@/components/files/content-preview').then(
+      (module) => module.ContentPreview,
+    ),
+  {
+    ssr: false,
+    loading: () => <div className="skeleton" style={{ height: 300 }} />,
+  },
+);
 
 import { PasswordInput } from '@/components/ui/password-input';
 import { useEffect, useState } from 'react';
@@ -126,23 +136,12 @@ export function PublicShare({ token }: { token: string }) {
             <p className="muted">
               {bytes(file.size)} · Access stays active while you view this page
             </p>
-            {file.mimeType === 'application/pdf' ? (
-              <iframe
-                title={file.name}
-                src={file.contentUrl}
-                style={{ width: '100%', height: '65dvh', border: 0 }}
-              />
-            ) : (
-              <img
-                alt={file.name}
-                src={file.contentUrl}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '65dvh',
-                  objectFit: 'contain',
-                }}
-              />
-            )}
+            <ContentPreview
+              url={file.contentUrl}
+              name={file.name}
+              mimeType={file.mimeType}
+              size={file.size}
+            />
             <p style={{ marginTop: 20 }}>
               <a className="btn" href={file.contentUrl} download={file.name}>
                 <Download size={16} />

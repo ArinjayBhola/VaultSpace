@@ -18,6 +18,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { rasterTypes } from '@/lib/file-types';
 import { api, bytes, date } from '@/lib/client';
 import type { VaultFile } from '@/types';
 type Details = {
@@ -51,6 +52,7 @@ export function FileDetails({
   });
   const file = data.file;
   const pdf = file.mimeType === 'application/pdf';
+  const image = rasterTypes.includes(file.mimeType);
   const waiting = file.processingStatus === 'pending';
   const preparing = file.processingStatus === 'processing';
   const ready = file.processingStatus === 'ready';
@@ -111,7 +113,7 @@ export function FileDetails({
             </span>
             <span className="details-format">PDF DOCUMENT</span>
           </>
-        ) : (
+        ) : image ? (
           <div className="details-image-viewport">
             <img
               alt={file.displayName}
@@ -119,6 +121,8 @@ export function FileDetails({
               style={{ transform: `scale(${zoom})` }}
             />
           </div>
+        ) : (
+          <FileText size={46} aria-label="File" />
         )}
         {pdf && file.hasThumbnail && (
           <img
@@ -128,7 +132,7 @@ export function FileDetails({
           />
         )}
       </div>
-      {!pdf && (
+      {image && (
         <label className="details-zoom">
           Zoom{' '}
           <Input
@@ -207,7 +211,13 @@ export function FileDetails({
         aria-live="polite"
       >
         <div className="details-preparation-title">
-          <span>{pdf ? 'PDF thumbnail' : 'Image preview'}</span>
+          <span>
+            {pdf
+              ? 'PDF thumbnail'
+              : file.mimeType.startsWith('image/')
+                ? 'Image preview'
+                : 'File status'}
+          </span>
           <span className="details-status">
             {ready ? (
               <Check size={13} />
@@ -225,7 +235,9 @@ export function FileDetails({
           {ready
             ? pdf
               ? 'Your PDF thumbnail is ready.'
-              : 'Your image preview is ready.'
+              : file.mimeType.startsWith('image/')
+                ? 'Your image preview is ready.'
+                : 'Your original file is ready to open or download.'
             : waiting || preparing
               ? pdf
                 ? 'Generating a first-page thumbnail. Your original is available now.'
@@ -258,15 +270,16 @@ export function FileDetails({
           <Download size={15} />
           Download
         </a>
-        {pdf && (
-          <Link className="btn" href={`/documents/${file.id}`}>
-            <ArrowUpRight size={15} />
-            Open PDF
-          </Link>
-        )}
+        <Link
+          className="btn"
+          href={pdf ? `/documents/${file.id}` : `/files/${file.id}`}
+        >
+          <ArrowUpRight size={15} />
+          {pdf ? 'Open PDF' : 'Open file'}
+        </Link>
         <button className="btn primary" onClick={() => onShare(file)}>
           <Link2 size={15} />
-          Share
+          {file.activeShareCount ? 'Revoke link' : 'Share'}
         </button>
       </div>
     </div>

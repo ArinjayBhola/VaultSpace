@@ -91,6 +91,12 @@ export async function listFiles(
     conditions.push(eq(files.mimeType, 'application/pdf'));
   if (input.type === 'images')
     conditions.push(sql`${files.mimeType} like 'image/%'`);
+  else if (!['all', 'pdf'].includes(input.type))
+    conditions.push(
+      input.type.startsWith('mime:')
+        ? eq(files.mimeType, input.type.slice(5))
+        : eq(files.extension, input.type),
+    );
   if (input.collection)
     conditions.push(
       sql`exists(select 1 from collection_files cf join collections c on c.id=cf.collection_id where cf.file_id=${files.id} and cf.collection_id=${input.collection} and c.owner_id=${ownerId} and c.deleted_at is null)`,

@@ -1,4 +1,5 @@
 'use client';
+import { typeLabel } from '@/lib/file-types';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -30,15 +31,31 @@ export function Overview({
         '/api/analytics?timezone=' + encodeURIComponent(userTimeZone()),
       ),
   });
-  const images =
-    data?.distribution
-      .filter((item) => item.type.startsWith('image/'))
-      .reduce((sum, item) => sum + item.bytes, 0) ?? 0;
-  const documents =
-    data?.distribution
-      .filter((item) => item.type === 'application/pdf')
-      .reduce((sum, item) => sum + item.bytes, 0) ?? 0;
-  const ratio = data?.activeBytes ? (images / data.activeBytes) * 100 : 0;
+  const palette = [
+    '#4f7ff0',
+    '#a69af1',
+    '#4b9e82',
+    '#e1a64b',
+    '#d17a8b',
+    '#6599bd',
+  ];
+  const distribution = (data?.distribution ?? []).map((entry, index, all) => {
+    const total = data?.activeBytes ?? 0;
+    const start = total
+      ? (all.slice(0, index).reduce((sum, item) => sum + item.bytes, 0) /
+          total) *
+        100
+      : 0;
+    return {
+      ...entry,
+      color: palette[index % palette.length],
+      start,
+      end: start + (total ? (entry.bytes / total) * 100 : 0),
+    };
+  });
+  const gradient = distribution
+    .map((entry) => entry.color + ' ' + entry.start + '% ' + entry.end + '%')
+    .join(',');
   return (
     <>
       <section className="overview-welcome">
@@ -90,12 +107,17 @@ export function Overview({
             role="img"
             aria-label={
               data
-                ? `${bytes(images)} in images and ${bytes(documents)} in PDFs`
+                ? distribution
+                    .map(
+                      (entry) =>
+                        typeLabel('', entry.type) + ': ' + bytes(entry.bytes),
+                    )
+                    .join(', ')
                 : 'Loading storage breakdown'
             }
             style={{
               background: data?.activeBytes
-                ? `conic-gradient(#4f7ff0 0% ${ratio}%,#a69af1 ${ratio}% 100%)`
+                ? `conic-gradient(${gradient})`
                 : 'var(--border)',
             }}
           >
@@ -105,14 +127,13 @@ export function Overview({
             </div>
           </div>
           <div className="storage-donut-legend">
-            <span>
-              <i style={{ background: '#4f7ff0' }} />
-              Images<strong>{data ? bytes(images) : '—'}</strong>
-            </span>
-            <span>
-              <i style={{ background: '#a69af1' }} />
-              Documents<strong>{data ? bytes(documents) : '—'}</strong>
-            </span>
+            {distribution.map((entry) => (
+              <span key={entry.type}>
+                <i style={{ background: entry.color }} />
+                {typeLabel('', entry.type)}
+                <strong>{bytes(entry.bytes)}</strong>
+              </span>
+            ))}
           </div>
           <p>
             {data

@@ -15,11 +15,14 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { defaultShareExpiry } from '@/lib/time';
 import { api, date } from '@/lib/client';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DateTimePicker } from '@/components/ui/date-picker';
 type Share = {
+  url: string | null;
+  visibleUntil: string | null;
   id: string;
   createdAt: string;
   expiresAt: string | null;
@@ -53,7 +56,18 @@ export function FileSharing({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [revoke, setRevoke] = useState<Share | null>(null);
+  const [revokeAll, setRevokeAll] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedShare, setCopiedShare] = useState('');
+  async function copyExisting(share: Share) {
+    if (!share.url) return;
+    try {
+      await navigator.clipboard.writeText(share.url);
+      setCopiedShare(share.id);
+    } catch {
+      setError('Copy failed. Open the link to copy its URL.');
+    }
+  }
   const {
     data,
     error: loadError,
@@ -68,6 +82,7 @@ export function FileSharing({
     await Promise.all([
       client.invalidateQueries({ queryKey: ['shares'] }),
       client.invalidateQueries({ queryKey: ['files'] }),
+      client.invalidateQueries({ queryKey: ['file-details', fileId] }),
       client.invalidateQueries({ queryKey: ['activity'] }),
       client.invalidateQueries({ queryKey: ['analytics'] }),
     ]);
@@ -97,12 +112,18 @@ export function FileSharing({
     }
   }
   async function expire() {
-    if (!revoke) return;
+    if (!revoke && !revokeAll) return;
     setBusy(true);
     setError('');
     try {
-      await api('/api/shares', { action: 'revoke', id: revoke.id });
+      await api(
+        '/api/shares',
+        revokeAll
+          ? { action: 'revoke-file', fileId }
+          : { action: 'revoke', id: revoke?.id },
+      );
       setRevoke(null);
+      setRevokeAll(false);
       await refresh();
     } catch (cause) {
       setError(
@@ -125,16 +146,21 @@ export function FileSharing({
         <button
           type="button"
           className="btn"
+          disabled={isPending || Boolean(loadError)}
           onClick={() => {
+            if (data?.totals.activeLinks) {
+              setRevokeAll(true);
+              return;
+            }
             setError('');
             setUrl('');
-            setExpiry('');
+            setExpiry(defaultShareExpiry());
             setPassword('');
             setCreating(true);
           }}
         >
-          <Plus size={14} />
-          Create link
+          {data?.totals.activeLinks ? <Clock3 size={14} /> : <Plus size={14} />}
+          {data?.totals.activeLinks ? 'Revoke link' : 'Create link'}
         </button>
       </div>
       {loadError ? (
@@ -230,6 +256,37 @@ export function FileSharing({
                       <dd>{date(share.lastAccessedAt)}</dd>
                     </div>
                   </dl>
+                  <div className="share-link-actions">
+                    {share.url ? (
+                      <>
+                        <a
+                          className="btn"
+                          href={share.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open link
+                        </a>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => void copyExisting(share)}
+                        >
+                          <Copy size={14} />
+                          {copiedShare === share.id ? 'Copied' : 'Copy link'}
+                        </button>
+                      </>
+                    ) : (
+                      <small className="muted">
+                        Original URL unavailable for this older link
+                      </small>
+                    )}
+                  </div>
+                  {share.visibleUntil && (
+                    <p className="muted">
+                      Visible until {date(share.visibleUntil)}
+                    </p>
+                  )}
                 </article>
               ))}
             </div>
@@ -354,18 +411,24 @@ export function FileSharing({
         )}
       </Dialog>
       <Dialog
-        open={Boolean(revoke)}
+        open={Boolean(revoke) || revokeAll}
         onOpenChange={(open) => {
-          if (!open && !busy) setRevoke(null);
+          if (!open && !busy) {
+            setRevoke(null);
+            setRevokeAll(false);
+          }
         }}
-        title="Expire this link now?"
+        title={revokeAll ? 'Revoke active links?' : 'Expire this link now?'}
         description="This revokes the link and ends future access through it. Your original file stays private and available to you."
       >
         <div className="dialog-actions">
           <button
             className="btn"
             disabled={busy}
-            onClick={() => setRevoke(null)}
+            onClick={() => {
+              setRevoke(null);
+              setRevokeAll(false);
+            }}
           >
             Cancel
           </button>

@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
 'use client';
 import dynamic from 'next/dynamic';
+import { defaultShareExpiry } from '@/lib/time';
+import { typeLabel, extensionOf } from '@/lib/file-types';
 import { fileQuery } from '@/lib/file-query';
 
 import { PasswordInput } from '@/components/ui/password-input';
@@ -279,7 +281,7 @@ export function Workspace() {
     setError('');
     setShareUrl('');
     setPassword('');
-    setExpiry('');
+    setExpiry(next.type === 'share' ? defaultShareExpiry() : '');
     setName(
       next.file?.displayName ??
         next.folder?.name ??
@@ -519,7 +521,7 @@ export function Workspace() {
   function open(file: VaultFile) {
     if (file.mimeType === 'application/pdf')
       router.push(`/documents/${file.id}`);
-    else openAction({ type: 'details', file });
+    else router.push(`/files/${file.id}`);
   }
   function fileMenu(file: VaultFile) {
     return (
@@ -556,15 +558,6 @@ export function Workspace() {
               </>
             ) : (
               <>
-                {Boolean(file.activeShareCount) && (
-                  <Menu.Item
-                    className="menu-item danger"
-                    onSelect={() => openAction({ type: 'revoke-shares', file })}
-                  >
-                    <Link2 size={14} />
-                    Revoke sharing
-                  </Menu.Item>
-                )}
                 <Menu.Item className="menu-item" onSelect={() => open(file)}>
                   <ArrowUpRight size={14} />
                   Open file
@@ -617,10 +610,15 @@ export function Workspace() {
                 )}
                 <Menu.Item
                   className="menu-item"
-                  onSelect={() => openAction({ type: 'share', file })}
+                  onSelect={() =>
+                    openAction({
+                      type: file.activeShareCount ? 'revoke-shares' : 'share',
+                      file,
+                    })
+                  }
                 >
                   <Link2 size={14} />
-                  Share file
+                  {file.activeShareCount ? 'Revoke link' : 'Share file'}
                 </Menu.Item>
                 <Menu.Item
                   className="menu-item"
@@ -731,7 +729,7 @@ export function Workspace() {
             <p>
               {folderId
                 ? `Upload into ${data?.breadcrumbs.at(-1)?.name || 'this folder'}`
-                : 'Images and PDFs, stored privately'}
+                : 'Your files, stored privately'}
             </p>
           </div>
         </div>
@@ -1347,22 +1345,25 @@ export function Workspace() {
                     role="group"
                     aria-label="File type filter"
                   >
-                    {[
-                      ['all', 'All files'],
-                      ['images', 'Images'],
-                      ['pdf', 'PDFs'],
-                    ].map(([value, label]) => (
-                      <button
-                        key={value}
-                        className={`tab ${(params.get('type') ?? 'all') === value ? 'active' : ''}`}
-                        aria-pressed={(params.get('type') ?? 'all') === value}
-                        onClick={() =>
-                          filter('type', value === 'all' ? '' : value)
-                        }
-                      >
-                        {label}
-                      </button>
-                    ))}
+                    <Select
+                      aria-label="File type filter"
+                      value={params.get('type') ?? 'all'}
+                      onChange={(event) =>
+                        filter(
+                          'type',
+                          event.target.value === 'all'
+                            ? ''
+                            : event.target.value,
+                        )
+                      }
+                    >
+                      <option value="all">All file types</option>
+                      {(data?.fileTypes ?? []).map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label} ({type.count})
+                        </option>
+                      ))}
+                    </Select>
                   </div>
                   <div className="file-toolbar-actions">
                     <Select
@@ -1469,8 +1470,11 @@ export function Workspace() {
                       onChange={(e) => filter('type', e.target.value)}
                     >
                       <option value="all">All file types</option>
-                      <option value="images">Images</option>
-                      <option value="pdf">PDF documents</option>
+                      {(data?.fileTypes ?? []).map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label} ({type.count})
+                        </option>
+                      ))}
                     </Select>
                   </label>
                   <button className="btn primary">
@@ -1714,8 +1718,10 @@ export function Workspace() {
                               >
                                 {f.mimeType === 'application/pdf' ? (
                                   <FileText size={49} strokeWidth={1} />
-                                ) : (
+                                ) : f.mimeType.startsWith('image/') ? (
                                   <ImageIcon size={49} strokeWidth={1} />
+                                ) : (
+                                  <FileText size={49} strokeWidth={1} />
                                 )}
                                 <span
                                   style={{
@@ -1731,7 +1737,10 @@ export function Workspace() {
                                       : 'PDF DOCUMENT'
                                     : f.processingStatus === 'pending'
                                       ? 'PREVIEW PENDING'
-                                      : 'IMAGE'}
+                                      : typeLabel(
+                                          extensionOf(f.displayName),
+                                          f.mimeType,
+                                        )}
                                 </span>
                               </div>
                             )}
@@ -1799,8 +1808,10 @@ export function Workspace() {
                           >
                             {f.mimeType === 'application/pdf' ? (
                               <FileText size={14} color="#e38579" />
-                            ) : (
+                            ) : f.mimeType.startsWith('image/') ? (
                               <ImageIcon size={14} color="#7aa4d5" />
+                            ) : (
+                              <FileText size={14} color="#7aa4d5" />
                             )}
                             <span
                               className="file-name"
@@ -1864,8 +1875,10 @@ export function Workspace() {
                               >
                                 {f.mimeType === 'application/pdf' ? (
                                   <FileText size={21} color="#e38579" />
-                                ) : (
+                                ) : f.mimeType.startsWith('image/') ? (
                                   <ImageIcon size={21} color="#7aa4d5" />
+                                ) : (
+                                  <FileText size={21} color="#7aa4d5" />
                                 )}
                                 <span>
                                   <HighlightText
@@ -2090,7 +2103,12 @@ export function Workspace() {
           <FileDetails
             key={action.file.id}
             file={action.file}
-            onShare={(file) => openAction({ type: 'share', file })}
+            onShare={(file) =>
+              openAction({
+                type: file.activeShareCount ? 'revoke-shares' : 'share',
+                file,
+              })
+            }
           />
         ) : (
           <form onSubmit={save}>

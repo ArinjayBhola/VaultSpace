@@ -249,19 +249,25 @@ export const pdfReadingProgress = pgTable('pdf_reading_progress', {
   zoomLevel: integer('zoom_level').notNull().default(100),
   updatedAt: updated(),
 });
-export const shareLinks = pgTable('share_links', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  fileId: uuid('file_id')
-    .notNull()
-    .references(() => files.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull().unique(),
-  passwordHash: text('password_hash'),
-  expiresAt: time('expires_at'),
-  revokedAt: time('revoked_at'),
-  createdAt: created(),
-  lastAccessedAt: time('last_accessed_at'),
-  accessCount: integer('access_count').notNull().default(0),
-});
+export const shareLinks = pgTable(
+  'share_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    passwordHash: text('password_hash'),
+    expiresAt: time('expires_at'),
+    revokedAt: time('revoked_at'),
+    createdAt: created(),
+    lastAccessedAt: time('last_accessed_at'),
+    accessCount: integer('access_count').notNull().default(0),
+  },
+  (table) => [
+    index('share_links_file_created').on(table.fileId, table.createdAt),
+  ],
+);
 export const shareViewers = pgTable(
   'share_viewers',
   {

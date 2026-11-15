@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { api, bytes } from '@/lib/client';
 import { Dialog } from '@/components/ui/dialog';
+import { uploadMime } from '@/lib/file-types';
 import { validFile } from '@/lib/validation';
 type State =
   | 'Queued'
@@ -199,14 +200,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       if (
         !validFile(
           item.file.name,
-          item.file.type,
+          uploadMime(item.file.name, item.file.type),
           item.file.size,
           policy.maxBytes,
         )
       )
-        throw new Error(
-          `Choose a supported image or PDF up to ${bytes(policy.maxBytes)}.`,
-        );
+        throw new Error(`Choose a file up to ${bytes(policy.maxBytes)}.`);
       const digest =
         item.file.size <= 50 * 1024 * 1024
           ? Array.from(
@@ -224,7 +223,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       let session = await api<UploadSession>('/api/uploads', {
         action: 'create',
         name: filename,
-        mime: item.file.type,
+        mime: uploadMime(item.file.name, item.file.type),
         size: item.file.size,
         folderId: item.folderId,
         checksum: digest,
@@ -244,7 +243,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         session = await api<UploadSession>('/api/uploads', {
           action: 'create',
           name: filename,
-          mime: item.file.type,
+          mime: uploadMime(item.file.name, item.file.type),
           size: item.file.size,
           folderId: item.folderId,
           checksum: digest,
@@ -413,7 +412,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       <Input
         ref={input}
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.avif"
         multiple
         hidden
         onChange={(e) => {

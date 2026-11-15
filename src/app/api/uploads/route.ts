@@ -2,7 +2,8 @@ import { vaultWriteLock } from '@/db/lock';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql, inArray } from 'drizzle-orm';
-import { fileTypeFromBuffer } from 'file-type';
+import { verifiedMime } from '@/lib/file-verification';
+import { uploadMime, extensionOf, needsThumbnail } from '@/lib/file-types';
 import { db } from '@/db';
 import {
   files,
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
     const user = await owner();
     const input = inputSchema.parse(await readJSON(request));
     if (input.action === 'create') {
+      input.mime = uploadMime(input.name, input.mime);
       storage.r2();
       const hardLimit = Math.min(
         Number(process.env.MAX_UPLOAD_BYTES || 1073741824),
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
         throw new ApiError(
           400,
           'INVALID_FILE',
-          'Choose a supported image or PDF within your upload size policy.',
+          'Choose a file within your upload size policy.',
         );
       await checkFolder(user.id, input.folderId);
       if (input.checksum && input.duplicatePolicy === 'ask') {
@@ -152,7 +154,7 @@ export async function POST(request: Request) {
           displayName: input.name,
           originalFilename: input.name,
           mimeType: input.mime,
-          extension: input.name.split('.').pop()!.toLowerCase(),
+          extension: extensionOf(input.name),
           sizeBytes: input.size,
           r2ObjectKey: `originals/${fileId}`,
           checksum: input.checksum,
@@ -203,12 +205,18 @@ export async function POST(request: Request) {
       .where(and(eq(uploads.id, input.id), eq(uploads.ownerId, user.id)));
     if (!upload)
       throw new ApiError(404, 'UPLOAD_NOT_FOUND', 'Upload session not found.');
-    if (upload.status === 'complete' && input.action === 'complete')
+    if (upload.status === 'complete' && input.action === 'complete') {
+      const [file] = await db()
+        .select({ processingStatus: files.processingStatus })
+        .from(files)
+        .where(and(eq(files.id, upload.fileId), eq(files.ownerId, user.id)));
+      if (!file) throw new ApiError(404, 'NOT_FOUND', 'File not found.');
       return {
         success: true,
         fileId: upload.fileId,
-        processingStatus: 'pending',
+        processingStatus: file.processingStatus,
       };
+    }
     if (upload.status === 'cancelled')
       if (input.action === 'cancel') return { success: true };
       else
@@ -347,15 +355,17 @@ export async function POST(request: Request) {
           'Stored object size does not match the upload.',
         );
       const sample = await storage.getObject(upload.objectKey, 'bytes=0-8191');
-      const type = await fileTypeFromBuffer(
+      const storedMime = await verifiedMime(
         await sample.Body!.transformToByteArray(),
+        upload.expectedMimeType,
+        (
+          await db()
+            .select({ name: files.originalFilename })
+            .from(files)
+            .where(eq(files.id, upload.fileId))
+        )[0]?.name ?? '',
       );
-      if (!type || type.mime !== upload.expectedMimeType)
-        throw new ApiError(
-          400,
-          'SIGNATURE_MISMATCH',
-          'File contents do not match the declared image or PDF type.',
-        );
+      const prepare = needsThumbnail(storedMime);
       await db().transaction(async (tx) => {
         await tx.execute(vaultWriteLock);
         const [current] = await tx
@@ -392,18 +402,20 @@ export async function POST(request: Request) {
           upload.objectKey,
           finalKey,
           metadata.ETag,
-          upload.expectedMimeType,
+          storedMime,
         );
         const finalMetadata = await storage.headObject(finalKey);
         const finalSample = await storage.getObject(finalKey, 'bytes=0-8191');
-        const finalType = await fileTypeFromBuffer(
+        const finalMime = await verifiedMime(
           await finalSample.Body!.transformToByteArray(),
+          storedMime,
+          pendingFile.originalFilename,
         );
-        if (finalType?.mime !== upload.expectedMimeType)
+        if (finalMime !== storedMime)
           throw new ApiError(
             400,
             'SIGNATURE_MISMATCH',
-            'Stored original does not match the declared file type.',
+            'Stored original type changed during verification.',
           );
         if (finalMetadata.ContentLength !== upload.expectedSize)
           throw new ApiError(
@@ -422,7 +434,8 @@ export async function POST(request: Request) {
           .update(files)
           .set({
             uploadStatus: 'complete',
-            processingStatus: 'pending',
+            processingStatus: prepare ? 'pending' : 'ready',
+            mimeType: storedMime,
             createdAt: new Date(),
             folderId,
             updatedAt: new Date(),
@@ -436,9 +449,10 @@ export async function POST(request: Request) {
             updatedAt: new Date(),
           })
           .where(eq(uploads.id, upload.id));
-        await tx
-          .insert(processingJobs)
-          .values({ fileId: upload.fileId, jobType: 'process' });
+        if (prepare)
+          await tx
+            .insert(processingJobs)
+            .values({ fileId: upload.fileId, jobType: 'process' });
         await tx.insert(activityEvents).values({
           ownerId: user.id,
           fileId: upload.fileId,
@@ -448,7 +462,7 @@ export async function POST(request: Request) {
       return {
         success: true,
         fileId: upload.fileId,
-        processingStatus: 'pending',
+        processingStatus: prepare ? 'pending' : 'ready',
       };
     } catch (e) {
       await db()

@@ -1,3 +1,4 @@
+import { typeLabel } from '@/lib/file-types';
 import 'server-only';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -18,6 +19,7 @@ export async function workspaceData(
     path,
     cleanup,
     currentCollection,
+    types,
   ] = await Promise.all([
     listFiles(ownerId, query),
     listFolders(
@@ -83,9 +85,41 @@ export async function workspaceData(
     query.collection
       ? listCollections(ownerId, query.collection)
       : Promise.resolve([]),
+    db()
+      .select({
+        extension: files.extension,
+        mime: files.mimeType,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(files)
+      .where(
+        and(
+          eq(files.ownerId, ownerId),
+          eq(files.uploadStatus, 'complete'),
+          query.view === 'trash'
+            ? sql`${files.deletedAt} is not null`
+            : isNull(files.deletedAt),
+        ),
+      )
+      .groupBy(files.extension, files.mimeType)
+      .orderBy(files.extension),
   ]);
   return {
     ...data,
+    fileTypes: Array.from(
+      types
+        .reduce((map, type) => {
+          const value = type.extension || 'mime:' + type.mime;
+          const previous = map.get(value);
+          map.set(value, {
+            value,
+            label: typeLabel(type.extension, type.mime),
+            count: (previous?.count ?? 0) + type.count,
+          });
+          return map;
+        }, new Map<string, { value: string; label: string; count: number }>())
+        .values(),
+    ),
     files: data.files.map((file) => ({
       ...file,
       createdAt: file.createdAt.toISOString(),

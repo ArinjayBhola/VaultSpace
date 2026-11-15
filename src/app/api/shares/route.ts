@@ -1,5 +1,5 @@
 import { vaultWriteLock } from '@/db/lock';
-import { randomBytes } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { db } from '@/db';
@@ -7,7 +7,12 @@ import { shareLinks, shareViewers, files, activityEvents } from '@/db/schema';
 import { owner, ApiError } from '@/lib/auth';
 import { respond, originGuard, readJSON } from '@/lib/api';
 import { id } from '@/lib/validation';
-import { tokenHash, hashSharePassword } from '@/lib/sharing';
+import {
+  tokenHash,
+  hashSharePassword,
+  shareToken,
+  ownerShareUrl,
+} from '@/lib/sharing';
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
@@ -18,8 +23,11 @@ export async function GET(request: Request) {
         fileId: id.optional(),
       })
       .parse(Object.fromEntries(new URL(request.url).searchParams));
+    const active = sql`${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null`;
+    const endedAt = sql`least(${shareLinks.revokedAt},${shareLinks.expiresAt},${files.deletedAt})`;
     const where = and(
       eq(files.ownerId, user.id),
+      sql`((${active}) or ${endedAt}>now()-interval '24 hours')`,
       query.fileId ? eq(shareLinks.fileId, query.fileId) : undefined,
       query.status === 'active'
         ? sql`${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now()) and ${files.deletedAt} is null`
@@ -37,6 +45,13 @@ export async function GET(request: Request) {
     const items = await db()
       .select({
         id: shareLinks.id,
+        tokenHash: shareLinks.tokenHash,
+        endedAt: sql<
+          string | null
+        >`case when ${active} then null else ${endedAt} end`,
+        visibleUntil: sql<
+          string | null
+        >`case when ${active} then null else ${endedAt}+interval '24 hours' end`,
         fileId: shareLinks.fileId,
         filename: files.displayName,
         mimeType: files.mimeType,
@@ -52,7 +67,11 @@ export async function GET(request: Request) {
       .from(shareLinks)
       .innerJoin(files, eq(files.id, shareLinks.fileId))
       .where(where)
-      .orderBy(desc(shareLinks.createdAt), desc(shareLinks.id))
+      .orderBy(
+        desc(sql`case when ${active} then 1 else 0 end`),
+        desc(sql`coalesce(${endedAt},${shareLinks.createdAt})`),
+        desc(shareLinks.id),
+      )
       .limit(25)
       .offset((query.page - 1) * 25);
     const [totals] = await db()
@@ -64,7 +83,16 @@ export async function GET(request: Request) {
       .from(shareLinks)
       .innerJoin(files, eq(files.id, shareLinks.fileId))
       .where(where);
-    return { items, totals, count: count.count, page: query.page, limit: 25 };
+    return {
+      items: items.map(({ tokenHash: storedHash, ...item }) => ({
+        ...item,
+        url: ownerShareUrl(item.id, storedHash),
+      })),
+      totals,
+      count: count.count,
+      page: query.page,
+      limit: 25,
+    };
   });
 }
 const schema = z.discriminatedUnion('action', [
@@ -96,7 +124,7 @@ export async function POST(request: Request) {
           .where(
             and(
               eq(shareLinks.fileId, file.id),
-              sql`${shareLinks.revokedAt} is null`,
+              sql`${shareLinks.revokedAt} is null and (${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now())`,
             ),
           )
           .returning({ id: shareLinks.id });
@@ -122,7 +150,8 @@ export async function POST(request: Request) {
           'INVALID_EXPIRY',
           'Choose an expiration in the future.',
         );
-      const token = randomBytes(32).toString('hex');
+      const shareId = randomUUID();
+      const token = shareToken(shareId);
       const passwordHash = input.password
         ? hashSharePassword(input.password)
         : null;
@@ -140,7 +169,25 @@ export async function POST(request: Request) {
             ),
           );
         if (!file) throw new ApiError(404, 'NOT_FOUND', 'File not found.');
+        const [existing] = await tx
+          .select({ id: shareLinks.id })
+          .from(shareLinks)
+          .where(
+            and(
+              eq(shareLinks.fileId, file.id),
+              isNull(shareLinks.revokedAt),
+              sql`(${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now())`,
+            ),
+          )
+          .limit(1);
+        if (existing)
+          throw new ApiError(
+            409,
+            'SHARE_EXISTS',
+            'This file already has an active link. Copy or revoke it before creating another.',
+          );
         await tx.insert(shareLinks).values({
+          id: shareId,
           fileId: file.id,
           tokenHash: tokenHash(token),
           passwordHash,
@@ -152,7 +199,7 @@ export async function POST(request: Request) {
           eventType: 'share_created',
         });
       });
-      return { url: `${process.env.BETTER_AUTH_URL}/s/${token}` };
+      return { url: new URL('/s/' + token, process.env.BETTER_AUTH_URL).href };
     }
     const [share] = await db()
       .select({ id: shareLinks.id, fileId: files.id })
@@ -165,7 +212,13 @@ export async function POST(request: Request) {
       await tx
         .update(shareLinks)
         .set({ revokedAt: sql`coalesce(${shareLinks.revokedAt},now())` })
-        .where(eq(shareLinks.id, share.id));
+        .where(
+          and(
+            eq(shareLinks.id, share.id),
+            isNull(shareLinks.revokedAt),
+            sql`(${shareLinks.expiresAt} is null or ${shareLinks.expiresAt}>now())`,
+          ),
+        );
       await tx.delete(shareViewers).where(eq(shareViewers.shareId, share.id));
       await tx.insert(activityEvents).values({
         ownerId: user.id,

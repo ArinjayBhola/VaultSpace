@@ -64,6 +64,13 @@
       "when": 1794715742196,
       "tag": "0008_natural_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794725775892,
+      "tag": "0009_friendly_jigsaw",
+      "breakpoints": true
     }
   ]
 }

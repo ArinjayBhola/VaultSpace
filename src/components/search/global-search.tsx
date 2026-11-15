@@ -63,7 +63,7 @@ export function GlobalSearch() {
       router.push(
         file.mimeType === 'application/pdf'
           ? `/documents/${file.id}`
-          : `/search?q=${encodeURIComponent(file.displayName)}`,
+          : `/files/${file.id}`,
       );
     else router.push(`/search?q=${encodeURIComponent(q)}`);
   }

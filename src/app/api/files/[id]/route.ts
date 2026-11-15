@@ -1,6 +1,6 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { processingJobs } from '@/db/schema';
+import { files } from '@/db/schema';
 import { ownedFile } from '@/features/files/service';
 import { owner } from '@/lib/auth';
 import { respond } from '@/lib/api';
@@ -14,19 +14,18 @@ export async function GET(
     const user = await owner();
     const file = await ownedFile(user.id, id.parse((await context.params).id));
     const [job] = await db()
-      .select({ error: processingJobs.lastError })
-      .from(processingJobs)
-      .where(
-        and(
-          eq(processingJobs.fileId, file.id),
-          eq(processingJobs.generation, file.processingVersion),
-        ),
-      )
-      .orderBy(desc(processingJobs.createdAt))
-      .limit(1);
+      .select({
+        error: sql<
+          string | null
+        >`(select last_error from processing_jobs where file_id=${file.id} and generation=${file.processingVersion} order by created_at desc limit 1)`,
+        activeShareCount: sql<number>`(select count(*)::int from share_links where file_id=${file.id} and revoked_at is null and (expires_at is null or expires_at>now()))`,
+      })
+      .from(files)
+      .where(eq(files.id, file.id));
     return {
       file: {
         id: file.id,
+        activeShareCount: job?.activeShareCount ?? 0,
         folderId: file.folderId,
         displayName: file.displayName,
         originalFilename: file.originalFilename,

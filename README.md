@@ -100,3 +100,21 @@ Inngest removal: apply migration 0007 with `npm run db:migrate` to add the PDF p
 Content search and stored PDF extraction have been removed. Migration 0008 drops `pdf_pages`, its text index, and the obsolete page cursor. It also clears obsolete OCR warnings when a thumbnail already exists. The migration is prepared but not automatically applied: stop older app versions before running `npm run db:migrate`, because they still reference the removed table. Originals, thumbnails, annotations, bookmarks and reading progress are retained. The new code can be reviewed against the existing schema before applying cleanup.
 
 Appearance offers 11 locally bundled/system font styles, including humanist Source Sans 3 and handwritten Caveat, Kalam and Patrick Hand, plus eight text sizes from 13px to 22px base. Styled dropdowns select font style and text size, with a live lettering preview; choices apply immediately and persist in this browser.
+
+## General files and private previews
+
+Upload any file type within the configured size/name policy. The picker is unrestricted; file filters are generated from stored extensions/MIME types, not a fixed PDF/image list. File bytes remain in R2, including unknown formats. PDFs retain their reader; other files open at `/files/[id]` with details, downloads and live share management. Only PDFs/raster images need thumbnails; other files finalize ready without a processing job.
+
+Private previews support raster images, browser-supported audio/video, escaped text/JSON, and simplified DOCX/XLSX/PPTX content. Office preview limits: 20 MiB compressed, 3,000 archive entries, 4 MiB per XML part, 8 MiB total decoded XML; spreadsheets show up to 10 sheets, 300 populated rows and 40 columns; presentations show up to 30 slides. Text preview is capped at 512 KiB. Layout, charts, embedded media and formula recalculation are not reproduced. Legacy DOC/XLS/PPT and other unsupported binaries have metadata, a first-1-KiB byte preview and download for their native application. This is not universal full-fidelity document rendering.
+
+Preview parsing runs only while viewing a file and is not stored or searched. HTML/SVG/code are shown as escaped text; unknown formats and executables are attachment-only. No files are sent to Google/Microsoft or another preview provider.
+
+Share forms default to tomorrow at the same local clock time. Existing active links replace the file-menu creation action with Revoke link; revocation still asks for confirmation. Share management shows active-link revocation rather than another Create link action while a link remains active. No schema migration is required for this update.
+
+## Share lifecycle and saved link access
+
+The shared-links page lists active links indefinitely and shows revoked/expired links for 24 hours after access first ended. Rows and counts use the same database-time visibility rule; active rows appear first. The history window is display retention, not reactivation or deletion of revocation records. Expired/revoked URLs can be copied or visited but do not grant file access.
+
+Each file has at most one active share. Creation checks under the vault transaction lock and migration 0009 adds a database guard plus a supporting index. The migration keeps the newest link if older data has duplicate active links, revokes the others, and logs those changes. It was applied and verified in the configured database. Other deployments must run `npm run db:migrate` before release.
+
+Open and Copy are available for all listed links. New token URLs are owner-recoverable using a domain-separated HMAC and random share UUID; only the SHA-256 hash is stored. Older random-token shares use a signed alias bound to the same share ID and stored hash. Their original URLs remain valid under the same policy; the alias does not create a second share and uses the same password, expiry, revocation, throttling and counters. Rotating BETTER_AUTH_SECRET invalidates previous aliases; the owner can generate current aliases again by reopening share management. Raw token hashes and secrets are not sent to clients.

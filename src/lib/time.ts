@@ -34,3 +34,15 @@ export function localDateLabel(value: string) {
         year: 'numeric',
       });
 }
+
+export function defaultShareExpiry() {
+  const value = new Date();
+  value.setDate(value.getDate() + 1);
+  return (
+    localDateValue(value) +
+    'T' +
+    String(value.getHours()).padStart(2, '0') +
+    ':' +
+    String(value.getMinutes()).padStart(2, '0')
+  );
+}

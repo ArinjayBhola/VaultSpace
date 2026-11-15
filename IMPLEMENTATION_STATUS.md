@@ -131,3 +131,23 @@ Initial file results are fetched server-side and hydrated with a request-local Q
 Files and analytics refresh every two minutes instead of frequent polling; operations back off from 15 seconds to two minutes while idle and wake immediately on local events. Metadata stale time defaults to one minute. Mutations invalidate related keys, stars update optimistically with per-file duplicate protection and rollback, and upload completion does not wait for unrelated refreshes. Private thumbnail ETags permit authenticated 304 responses before R2 fetches; originals/public shares retain no-store. Fonts and deep offset pagination remain future optimization areas.
 
 Production build including TypeScript and ESLint passed. No tests were added or run; authenticated browser workflows and post-deployment latency remain unmeasured. No new schema migration is required. Prior migration 0008 was successfully applied and verified at the owner's intervening request. Performance edits remain local and uncommitted.
+
+## General file workspaces, dynamic types and sharing fixes
+
+Removed the fixed upload-format restriction and picker accept list. Names/sizes and MIME syntax remain validated; detected MIME is recorded and known inline types require signatures. Unknown/active formats are attachment-only, and text/Office previews render escaped browser-side content with bounded reads. General files finalize ready without image processing; retrying a generic file cannot enter Sharp. No new migration is needed.
+
+Added /files/[id] with private image zoom, media controls, text/JSON, simplified DOCX/XLSX/PPTX, metadata, original download and FileSharing. Legacy/binary formats provide bounded byte previews and native-app download; full-fidelity rendering of every format is not claimed. Public shared files use the same safe preview component after authorization. Upload verification still checks size and conditional staging copy; completion remains idempotent.
+
+Database-generated extension/MIME facets replace fixed type controls, and storage distribution includes all MIME types. Active sharing replaces Share file with Revoke link in menus/details and share management, with confirmation. New forms default to the next calendar day at the same local hour/minute. Existing expiry/password customization remains available.
+
+No test files were added or tests run. Final production build (including strict TypeScript), ESLint and whitespace checks passed. Browser previews and live new-format upload/share flows have not been executed during this update. Changes remain local and uncommitted.
+
+## Shared-link lifecycle, one active share and reusable URLs
+
+Added active-first listing with database-enforced visibility filters: active links persist; expired/revoked links disappear from listings 24 hours after the first access-ending timestamp. Counts, totals, file-level management and pagination share this policy. Revocation skips already-ended links rather than resetting history. The shared page links to generic file workspaces and provides Open/Copy for each listed state; inactive public URLs still fail authorization.
+
+Share creation rejects existing active links under the transaction write lock. Migration 0009 adds a share lookup index, resolves older duplicate active links by retaining the newest, and installs a database trigger guard. Applied successfully. Read-only verification found the trigger enabled, index present and no duplicate active links; there were no duplicates before migration, so no original links needed revoking.
+
+New raw token URLs are recoverable with a domain-separated HMAC based on a random UUID and server secret; only hashes persist. Older random-token links are supported with versioned signed aliases bound to the existing record/hash. Original URLs remain unchanged and all aliases share the same access controls/counters; no second active share is created. Secret rotation changes signed aliases; owner management can regenerate them.
+
+Production build including TypeScript, ESLint and diff checks passed before final documentation updates; final synchronization follows. No test files were added or tests run. Authenticated browser workflows/concurrency load tests were not executed. This release also includes the previously pending general-file uploads, previews, dynamic filters and default share expiry changes.

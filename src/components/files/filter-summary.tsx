@@ -32,7 +32,12 @@ export function FilterSummary({
     if (!value || (key === 'type' && value === 'all')) return [];
     const labels: Record<string, string> = {
       q: `Search: ${value}`,
-      type: value === 'images' ? 'Images only' : 'PDFs only',
+      type:
+        value === 'images'
+          ? 'Images only'
+          : value.startsWith('mime:')
+            ? value.slice(5)
+            : value.toUpperCase(),
       starred: value === 'true' ? 'Starred only' : 'Not starred',
       after: `From ${localDateLabel(localDateValue(value))}`,
       before: `Until ${localDateLabel(localDateValue(value))}`,

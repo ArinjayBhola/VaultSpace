@@ -11,10 +11,15 @@ import {
   Eye,
   Users,
   ArrowUpRight,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { api, date } from '@/lib/client';
 import { Dialog } from '@/components/ui/dialog';
 type Share = {
+  url: string | null;
+  endedAt: string | null;
+  visibleUntil: string | null;
   id: string;
   fileId: string;
   filename: string;
@@ -47,12 +52,29 @@ export function Shares() {
   const [revoke, setRevoke] = useState<Share | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [copied, setCopied] = useState('');
+  async function copyLink(share: Share) {
+    if (!share.url) return;
+    setActionError('');
+    try {
+      await navigator.clipboard.writeText(share.url);
+      setCopied(share.id);
+    } catch {
+      setActionError(
+        'Could not copy the link. Open it and copy the URL from your browser.',
+      );
+    }
+  }
   async function confirm() {
     if (!revoke) return;
     setBusy(true);
     try {
       await api('/api/shares', { action: 'revoke', id: revoke.id });
-      await client.invalidateQueries();
+      await Promise.all(
+        ['shares', 'files', 'file-details', 'activity', 'analytics'].map(
+          (key) => client.invalidateQueries({ queryKey: [key] }),
+        ),
+      );
       setRevoke(null);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Revocation failed.');
@@ -62,6 +84,16 @@ export function Shares() {
   }
   return (
     <>
+      {actionError && !revoke && (
+        <p role="alert" className="notice error">
+          {actionError}
+        </p>
+      )}
+      {copied && (
+        <p role="status" className="muted">
+          Share link copied.
+        </p>
+      )}
       {error && (
         <div className="notice error" role="alert">
           {error.message}
@@ -118,8 +150,8 @@ export function Shares() {
           size={15}
           style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }}
         />
-        Create links from a file’s action menu. For your privacy, links are
-        shown only once when created.
+        Active links stay listed. Revoked and expired links remain visible for
+        24 hours after access ends. Each file can have one active link.
       </div>
       <div className="toolbar">
         <span
@@ -187,7 +219,7 @@ export function Shares() {
                         href={
                           s.mimeType === 'application/pdf'
                             ? `/documents/${s.fileId}`
-                            : '/search?q=' + encodeURIComponent(s.filename)
+                            : `/files/${s.fileId}`
                         }
                       >
                         {s.filename}
@@ -199,11 +231,11 @@ export function Shares() {
                     <span
                       className={`badge share-status ${s.active ? 'active' : s.revokedAt ? 'revoked' : 'expired'}`}
                     >
-                      {s.revokedAt
-                        ? 'Revoked'
-                        : s.expiresAt && new Date(s.expiresAt) < new Date()
-                          ? 'Expired'
-                          : 'Active'}
+                      {s.active
+                        ? 'Active'
+                        : s.revokedAt
+                          ? 'Revoked'
+                          : 'Expired'}
                     </span>
                   </td>
                   <td data-label="Created">{date(s.createdAt)}</td>
@@ -218,22 +250,60 @@ export function Shares() {
                   </td>
                   <td data-label="Last opened">{date(s.lastAccessedAt)}</td>
                   <td>
-                    {!s.revokedAt && (
-                      <button
-                        className="btn danger"
-                        style={{
-                          padding: '6px 10px',
-                          fontSize:
-                            'max(9px, calc(13px * var(--vault-font-scale, 1)))',
-                        }}
-                        onClick={() => {
-                          setActionError('');
-                          setRevoke(s);
-                        }}
-                      >
-                        <X size={13} />
-                        Revoke
-                      </button>
+                    <div className="share-link-actions">
+                      {s.url ? (
+                        <>
+                          <a
+                            className="btn"
+                            href={s.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={
+                              'Open ' +
+                              (s.active
+                                ? 'active'
+                                : s.revokedAt
+                                  ? 'revoked'
+                                  : 'expired') +
+                              ' share link for ' +
+                              s.filename
+                            }
+                          >
+                            <ExternalLink size={14} />
+                            Open link
+                          </a>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => void copyLink(s)}
+                            aria-label={'Copy share link for ' + s.filename}
+                          >
+                            <Copy size={14} />
+                            {copied === s.id ? 'Copied' : 'Copy link'}
+                          </button>
+                        </>
+                      ) : (
+                        <span className="muted legacy-share-note">
+                          Original URL unavailable for this older link
+                        </span>
+                      )}
+                      {s.active && (
+                        <button
+                          className="btn danger"
+                          onClick={() => {
+                            setActionError('');
+                            setRevoke(s);
+                          }}
+                        >
+                          <X size={13} />
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                    {s.visibleUntil && (
+                      <small className="shared-history-until">
+                        Visible until {date(s.visibleUntil)}
+                      </small>
                     )}
                   </td>
                 </tr>

@@ -1,3 +1,4 @@
+import { needsThumbnail } from '@/lib/file-types';
 import { eq, and, sql, desc, lt, inArray } from 'drizzle-orm';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
@@ -97,6 +98,32 @@ async function executeOperation(job: Operation) {
       .set({ status: 'cancelled' })
       .where(eq(processingJobs.id, job.id));
     return { skipped: true };
+  }
+  if (!needsThumbnail(file.mimeType)) {
+    await db().transaction(async (tx) => {
+      await tx.execute(vaultWriteLock);
+      const changed = await tx
+        .update(files)
+        .set({ processingStatus: 'ready', updatedAt: new Date() })
+        .where(
+          and(
+            eq(files.id, file.id),
+            eq(files.processingVersion, job.generation),
+            sql`${files.deletedAt} is null`,
+          ),
+        )
+        .returning({ id: files.id });
+      await tx
+        .update(processingJobs)
+        .set({
+          status: changed.length ? 'complete' : 'cancelled',
+          lastError: null,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(processingJobs.id, job.id));
+    });
+    return { status: 'ready' };
   }
   const limit = Math.min(
     Number(process.env.MAX_PROCESSING_BYTES || 52428800),

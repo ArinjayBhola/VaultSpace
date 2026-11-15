@@ -1,3 +1,4 @@
+import { safeInline } from '@/lib/file-types';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
@@ -73,7 +74,7 @@ export async function GET(request: Request, context: Context) {
       'Content-Type': row.file.mimeType,
       'Cache-Control': 'private, no-store',
       'Accept-Ranges': 'bytes',
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(row.file.displayName)}`,
+      'Content-Disposition': `${safeInline(row.file.mimeType) ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(row.file.displayName)}`,
     });
     if (object.ContentRange) headers.set('Content-Range', object.ContentRange);
     if (object.ContentLength !== undefined)

@@ -9,27 +9,17 @@ export const name = z
     (v) => !/[\x00-\x1f/\\]/.test(v),
     'Names cannot contain path separators or control characters.',
   );
-export const supported = {
-  'application/pdf': ['pdf'],
-  'image/jpeg': ['jpg', 'jpeg'],
-  'image/png': ['png'],
-  'image/webp': ['webp'],
-  'image/gif': ['gif'],
-  'image/avif': ['avif'],
-};
 export function validFile(
   filename: string,
   mime: string,
   size: number,
   limit: number,
 ) {
-  const extension = filename.split('.').pop()?.toLowerCase();
   return (
+    name.safeParse(filename).success &&
     size > 0 &&
     size <= limit &&
-    Object.entries(supported).some(
-      ([type, exts]) => type === mime && exts.some((ext) => ext === extension),
-    )
+    /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(mime)
   );
 }
 export const searchFilters = z.object({
@@ -46,7 +36,7 @@ export const searchFilters = z.object({
   view: z
     .enum(['all', 'root', 'recent', 'starred', 'documents', 'trash'])
     .default('all'),
-  type: z.enum(['all', 'images', 'pdf']).default('all'),
+  type: z.string().max(160).default('all'),
   folder: id.optional(),
   collection: id.optional(),
   minSize: z.coerce.number().nonnegative().optional(),

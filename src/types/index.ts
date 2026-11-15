@@ -35,6 +35,7 @@ export type Collection = {
   count: number;
 };
 export type FileResponse = {
+  fileTypes: { value: string; label: string; count: number }[];
   cleanup: { available: boolean; failed: boolean } | null;
   collectionCount: number;
   currentCollection: Collection | null;
