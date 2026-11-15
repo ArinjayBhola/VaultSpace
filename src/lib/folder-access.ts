@@ -54,9 +54,10 @@ export async function assertFolderAccess(
   if (locked) throw new FolderLockedError(locked.id, locked.name);
 }
 export async function assertTreeAccess(ownerId: string, folderId: string) {
+  await assertFolderAccess(ownerId, folderId);
   const scope = await folderScope(ownerId);
   const result = await db().execute<{ id: string; name: string }>(
-    sql`with recursive tree as(select id,name from folders where id=${folderId} and owner_id=${ownerId} union all select f.id,f.name from folders f join tree t on f.parent_id=t.id where f.owner_id=${ownerId}) select id,name from tree where not vault_folder_access(id,${scope.sessionId}) limit 1`,
+    sql`with recursive tree as(select id,name,parent_id,password_hash from folders where id=${folderId} and owner_id=${ownerId} union all select f.id,f.name,f.parent_id,f.password_hash from folders f join tree t on f.parent_id=t.id where f.owner_id=${ownerId}) select id,name from tree t where password_hash is not null and vault_folder_access(parent_id,${scope.sessionId}) and not exists(select 1 from folder_unlocks u where u.folder_id=t.id and u.session_id=${scope.sessionId} and u.expires_at>now()) order by name,id limit 1`,
   );
   const locked = result.rows[0];
   if (locked) throw new FolderLockedError(locked.id, locked.name);

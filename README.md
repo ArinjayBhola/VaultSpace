@@ -140,3 +140,6 @@ My files lists the vault root and its folders. Recent lists files across folders
 
 
 File cards open the full file workspace. On /files/[id], use Expand preview for supported images, text/JSON, media and modern Office documents within the preview size limit. Images can also be clicked inside their inline preview. Unsupported binaries retain their existing download/byte fallback without an expand action. Edit file updates the name and description on the same page, preserves the extension, and skips unchanged saves.
+
+
+Protected folders can be unlocked directly in Trash. Delete permanently and Empty trash request any missing folder passwords one at a time, showing each folder name, then continue the original action. Nested protected folders require their own passwords. Empty trash checks its complete current deletion scope before queuing new cleanup, so cancelling a password prompt does not partially empty that request. Existing unexpired session unlocks are reused.

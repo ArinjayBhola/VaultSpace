@@ -224,3 +224,12 @@ Expansion reuses ContentPreview and the authenticated content endpoint inside th
 Added Edit file on the file workspace for base name and description. Extensions remain read-only; unchanged values skip requests. Runtime name validation, API errors, pending state and an accessible saved message are included. Changes persist through the existing authenticated rename API; file lists/details and related metadata queries update after success. No synthetic timestamps are written to the cache.
 
 Production build including strict TypeScript and ESLint passed. No test files were added and no test suite run. Browser layout, popup and edit interactions remain for manual review. Changes remain uncommitted and unpushed as requested.
+
+
+## Secure folder deletion directly from Trash
+
+Replaced silent skipping of locked trash contents with a complete scope authorization check before any new purge/job mutations. This covers single-folder permanent deletion and Empty trash across multiple or nested protected folders, including protected active ancestors of individually trashed files. A missing grant produces a structured, owner-scoped HTTP 423 folder challenge; no restore/move is required.
+
+Added a shared authorization prompt/retry hook around workspace mutations. Password prompts show the actual protected folder name, retain wrong-password/rate-limit errors, support cancellation, and retry the original action after each successful unlock. Multiple required passwords are requested sequentially. The Trash folder menu also unlocks in place. Fixed subtree lock selection to return an actual password-bearing folder whose ancestors are accessible, rather than an arbitrary locked descendant. Existing valid session grants are reused.
+
+Production build including strict TypeScript, ESLint, formatting and whitespace checks passed. A read-only database execution confirmed the ancestry query is valid; the configured database had no locked trash target to challenge at that point. No data was restored/deleted, no test fixtures/files created and no test suite run. The full multi-folder password/cancel workflow remains for manual browser verification. No migration required. Changes remain local and uncommitted.

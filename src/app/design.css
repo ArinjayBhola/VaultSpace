@@ -2276,3 +2276,14 @@ body {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+.folder-unlock-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-wrap: anywhere;
+}
+.folder-unlock-target svg {
+  flex-shrink: 0;
+  color: var(--blue);
+}

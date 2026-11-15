@@ -1,4 +1,4 @@
-import { withFolderScope } from '@/lib/folder-access';
+import { withFolderScope, FolderLockedError } from '@/lib/folder-access';
 import { NextResponse } from 'next/server';
 import { ZodError, z } from 'zod';
 import { ApiError } from './auth';
@@ -96,6 +96,17 @@ async function respondInScope(fn: () => Promise<unknown>) {
           },
         },
         { status: 409 },
+      );
+    if (e instanceof FolderLockedError)
+      return NextResponse.json(
+        {
+          error: {
+            code: e.code,
+            message: e.message,
+            folder: { id: e.folderId, name: e.folderName },
+          },
+        },
+        { status: e.status, headers: { 'Cache-Control': 'private, no-store' } },
       );
     if (e instanceof ApiError)
       return NextResponse.json(

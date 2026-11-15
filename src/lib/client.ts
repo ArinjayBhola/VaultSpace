@@ -1,3 +1,25 @@
+import { z } from 'zod';
+
+const errorResponse = z.object({
+  error: z
+    .object({
+      code: z.string().optional(),
+      message: z.string().optional(),
+      folder: z.object({ id: z.uuid(), name: z.string().max(240) }).optional(),
+    })
+    .optional(),
+  message: z.string().optional(),
+});
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public folder?: { id: string; name: string },
+  ) {
+    super(message);
+  }
+}
 export async function api<T>(
   url: string,
   body?: unknown,
@@ -23,14 +45,18 @@ export async function api<T>(
       `The service returned an unreadable response (${response.status}). Please retry.`,
     );
   }
-  if (!response.ok)
-    throw new Error(
-      typeof data?.error?.message === 'string'
-        ? data.error.message
-        : typeof data?.message === 'string'
-          ? data.message
-          : 'The request failed. Please retry.',
+  if (!response.ok) {
+    const parsed = errorResponse.safeParse(data);
+    const detail = parsed.success ? parsed.data : undefined;
+    throw new ApiClientError(
+      detail?.error?.message ??
+        detail?.message ??
+        'The request failed. Please retry.',
+      response.status,
+      detail?.error?.code,
+      detail?.error?.folder,
     );
+  }
   return data;
 }
 export function bytes(value: number) {

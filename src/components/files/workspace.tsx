@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Private previews require browser credentials; R2 thumbnails are already resized. */
 'use client';
 import { useDateFormatter } from '@/hooks/use-date-formatter';
+import { useFolderAuthorization } from '@/hooks/use-folder-authorization';
 import { FolderUnlock } from '@/components/folders/unlock';
 import dynamic from 'next/dynamic';
 import { splitFileName, withFileExtension } from '@/lib/file-name';
@@ -157,6 +158,11 @@ const titles: Record<string, [string, string]> = {
   '/shared': ['Shared links', 'Your files. Shared on your terms.'],
 };
 export function Workspace() {
+  const {
+    authorize,
+    requestUnlock,
+    prompt: folderPasswordPrompt,
+  } = useFolderAuthorization();
   const date = useDateFormatter();
   const pathname = usePathname();
   const router = useRouter();
@@ -379,9 +385,9 @@ export function Workspace() {
     ]);
   }
   async function mutate(body: unknown) {
-    const result = await api<{
+    const result = await authorize<{
       followUp?: { delivered: boolean; message: string };
-    }>('/api/files', body);
+    }>(() => api('/api/files', body));
     if (result.followUp) {
       setNotice(result.followUp.message);
       window.dispatchEvent(new Event('vault-operations'));
@@ -1266,7 +1272,23 @@ export function Workspace() {
                                     className="menu-item"
                                     onSelect={() => {
                                       if (f.locked) {
-                                        router.push('/folders/' + f.id);
+                                        void requestUnlock({
+                                          id: f.id,
+                                          name: f.name,
+                                        })
+                                          .then((unlocked) => {
+                                            if (unlocked)
+                                              void queryClient.invalidateQueries(
+                                                { queryKey: ['files'] },
+                                              );
+                                          })
+                                          .catch((cause) =>
+                                            setError(
+                                              cause instanceof Error
+                                                ? cause.message
+                                                : 'Could not unlock folder.',
+                                            ),
+                                          );
                                         return;
                                       }
                                       void api(
@@ -2477,6 +2499,7 @@ export function Workspace() {
           </form>
         )}
       </Dialog>
+      {folderPasswordPrompt}
     </div>
   );
 }
