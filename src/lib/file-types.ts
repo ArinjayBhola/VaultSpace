@@ -13,6 +13,37 @@ export const galleryImageExtensions = [
   'gif',
   'avif',
 ];
+export const galleryVideoExtensions = [
+  'mp4',
+  'webm',
+  'mov',
+  'm4v',
+  'mkv',
+  'avi',
+  'wmv',
+  'flv',
+  'mpg',
+  'mpeg',
+  'm2v',
+  '3gp',
+  '3g2',
+  'mts',
+  'm2ts',
+  'ts',
+  'vob',
+  'ogv',
+];
+// A .ts filename alone cannot distinguish a video from TypeScript source.
+export const galleryVideoFallbackExtensions = galleryVideoExtensions.filter(
+  (extension) => extension !== 'ts',
+);
+export function isGalleryVideo(name: string, mime: string) {
+  return (
+    mime.startsWith('video/') ||
+    (mime === 'application/octet-stream' &&
+      galleryVideoFallbackExtensions.includes(extensionOf(name)))
+  );
+}
 export function needsThumbnail(mime: string) {
   return mime === 'application/pdf' || rasterTypes.includes(mime);
 }

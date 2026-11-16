@@ -162,6 +162,22 @@
   color: #fff;
   backdrop-filter: blur(8px);
 }
+.gallery-video-badge {
+  position: absolute;
+  bottom: 9px;
+  right: 9px;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: white;
+  background: #101827ab;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
 .gallery-tile-caption {
   position: absolute;
   bottom: 0;

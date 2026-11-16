@@ -10,8 +10,9 @@ export function galleryRows(files: VaultFile[], width: number) {
   const ratio = (file: VaultFile) =>
     file.width && file.height
       ? Math.max(0.4, Math.min(2.8, file.width / file.height))
-      : file.mimeType === 'application/pdf'
-        ? 0.72
+      : file.mimeType.startsWith('video/') ||
+          file.mimeType === 'application/octet-stream'
+        ? 16 / 9
         : 1;
   function finish(last = false) {
     const sum = ratios.reduce((total, value) => total + value, 0);

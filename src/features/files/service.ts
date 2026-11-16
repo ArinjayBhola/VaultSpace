@@ -29,7 +29,7 @@ import {
   processingJobs,
 } from '@/db/schema';
 import { ApiError } from '@/lib/auth';
-import { galleryImageExtensions, rasterTypes } from '@/lib/file-types';
+import { galleryMediaSQL } from './gallery-query';
 import { searchFilters, wouldCycle } from '@/lib/validation';
 import { z } from 'zod';
 export async function ownedFile(
@@ -104,11 +104,7 @@ export async function listFiles(
   if (input.starred === 'false') conditions.push(isNull(files.starredAt));
   if (input.view === 'documents')
     conditions.push(eq(files.mimeType, 'application/pdf'));
-  if (input.view === 'gallery')
-    conditions.push(
-      inArray(files.extension, galleryImageExtensions),
-      inArray(files.mimeType, rasterTypes),
-    );
+  if (input.view === 'gallery') conditions.push(galleryMediaSQL());
   if (input.type.length)
     conditions.push(
       sql`(${or(...input.type.map((type) => (type === 'pdf' ? eq(files.mimeType, 'application/pdf') : type === 'images' ? sql`${files.mimeType} like 'image/%'` : type.startsWith('mime:') ? eq(files.mimeType, type.slice(5)) : eq(files.extension, type))))})`,

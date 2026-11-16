@@ -82,3 +82,60 @@
 .lightbox-image-error a {
   text-decoration: underline;
 }
+.image-lightbox-dialog > .lightbox-nav {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% - 20px);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: white;
+  background: #111827aa;
+}
+.image-lightbox-dialog > .lightbox-previous {
+  left: -48px;
+}
+.image-lightbox-dialog > .lightbox-next {
+  right: -48px;
+}
+.lightbox-nav:disabled {
+  opacity: 0.25;
+}
+.lightbox-navigation-error {
+  margin: 0;
+  max-width: min(500px, calc(100vw - 112px));
+  background: var(--surface);
+  color: var(--text);
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.lightbox-video-stage {
+  position: relative;
+  background: #080d17;
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: 0 14px 70px #0003;
+}
+.lightbox-video-stage > video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.lightbox-video-message {
+  position: absolute;
+  inset: 0;
+  padding: 20px 52px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  gap: 12px;
+}
+.lightbox-video-message p {
+  margin: 0;
+  font-size: 13px;
+}

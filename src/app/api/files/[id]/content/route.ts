@@ -18,6 +18,11 @@ export async function GET(
     const file = await ownedFile(user.id, id.parse((await context.params).id));
     const url = new URL(request.url);
     const thumbnail = url.searchParams.get('thumbnail') === '1';
+    // The owner gallery requests video bytes explicitly. Opaque/unrecognized
+    // formats remain attachments, even if their filename has a video extension.
+    const inlineVideo =
+      url.searchParams.get('media') === '1' &&
+      file.mimeType.startsWith('video/');
     const range = request.headers.get('range');
     if (range && !/^bytes=\d+-\d*$/.test(range))
       return new Response(null, { status: 416 });
@@ -76,7 +81,7 @@ export async function GET(
       'Cache-Control': cacheHeaders.get('Cache-Control') ?? 'private, no-store',
       Vary: 'Cookie',
       'Accept-Ranges': 'bytes',
-      'Content-Disposition': `${url.searchParams.get('download') === '1' || (!thumbnail && !safeInline(file.mimeType)) ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.displayName)}`,
+      'Content-Disposition': `${url.searchParams.get('download') === '1' || (!thumbnail && !safeInline(file.mimeType) && !inlineVideo) ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.displayName)}`,
     });
     if (etag) headers.set('ETag', etag);
     if (object.ContentLength !== undefined)

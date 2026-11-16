@@ -5,13 +5,10 @@ import {
   fileAccessSQL,
   folderParentAccessSQL,
 } from '@/lib/folder-access';
-import {
-  typeLabel,
-  galleryImageExtensions,
-  rasterTypes,
-} from '@/lib/file-types';
+import { typeLabel } from '@/lib/file-types';
+import { galleryMediaSQL } from './gallery-query';
 import 'server-only';
-import { and, eq, isNull, sql, inArray } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { files, folders, collections, processingJobs } from '@/db/schema';
@@ -133,12 +130,7 @@ export async function workspaceData(
           eq(files.ownerId, ownerId),
           eq(files.uploadStatus, 'complete'),
           fileAccessSQL(access.sessionId),
-          query.view === 'gallery'
-            ? inArray(files.extension, galleryImageExtensions)
-            : undefined,
-          query.view === 'gallery'
-            ? inArray(files.mimeType, rasterTypes)
-            : undefined,
+          query.view === 'gallery' ? galleryMediaSQL() : undefined,
           query.view === 'trash'
             ? sql`${files.deletedAt} is not null`
             : isNull(files.deletedAt),

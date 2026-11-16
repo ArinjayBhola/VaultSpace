@@ -12,6 +12,8 @@ import Image from 'next/image';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import {
   Images,
+  Film,
+  Play,
   LoaderCircle,
   Star,
   MoreVertical,
@@ -28,9 +30,9 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { useFolderAuthorization } from '@/hooks/use-folder-authorization';
 import { api, bytes } from '@/lib/client';
 import { localDateValue } from '@/lib/time';
-import { typeLabel, extensionOf } from '@/lib/file-types';
+import { typeLabel, extensionOf, isGalleryVideo } from '@/lib/file-types';
 import { galleryRows } from '@/lib/gallery-layout';
-import { ImageLightbox } from '@/components/files/image-lightbox';
+import { MediaLightbox } from '@/components/files/image-lightbox';
 import type { FileResponse, VaultFile } from '@/types';
 import './gallery.css';
 
@@ -55,6 +57,10 @@ export function Gallery() {
   const [starBusy, setStarBusy] = useState<string[]>([]);
   const starRequests = useRef(new Set<string>());
   const [dialog, setDialog] = useState<FileDialog | null>(null);
+  const [navigating, setNavigating] = useState(false);
+  const [navigationError, setNavigationError] = useState('');
+  const navigationRequest = useRef(0);
+  const navigationInFlight = useRef(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const client = useQueryClient();
@@ -71,7 +77,7 @@ export function Gallery() {
     return () => observer.disconnect();
   }, []);
   const query = useInfiniteQuery({
-    queryKey: ['files', 'gallery', 'images', direction, [...types].sort()],
+    queryKey: ['files', 'gallery', 'media', direction, [...types].sort()],
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({
@@ -92,7 +98,8 @@ export function Gallery() {
     getNextPageParam: (last) =>
       last.page * last.limit < last.count ? last.page + 1 : undefined,
     staleTime: 60000,
-    refetchInterval: 120000,
+    refetchInterval: dialog?.kind === 'preview' ? false : 120000,
+    refetchOnWindowFocus: dialog?.kind !== 'preview',
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isError } = query;
   useEffect(() => {
@@ -125,6 +132,78 @@ export function Gallery() {
     groups.set(day, group);
   }
   const count = query.data?.pages[0]?.count;
+  const previewIndex =
+    dialog?.kind === 'preview'
+      ? files.findIndex((file) => file.id === dialog.file.id)
+      : -1;
+
+  function openPreview(file: VaultFile) {
+    navigationRequest.current++;
+    navigationInFlight.current = false;
+    setNavigating(false);
+    setNavigationError('');
+    setDialog({ kind: 'preview', file });
+  }
+  function closeDialog() {
+    navigationRequest.current++;
+    navigationInFlight.current = false;
+    setNavigating(false);
+    setNavigationError('');
+    setDialog(null);
+  }
+  async function navigatePreview(step: -1 | 1) {
+    if (
+      dialog?.kind !== 'preview' ||
+      previewIndex < 0 ||
+      navigationInFlight.current
+    )
+      return;
+    setNavigationError('');
+    const adjacent = files[previewIndex + step];
+    if (adjacent) {
+      setDialog({ kind: 'preview', file: adjacent });
+      return;
+    }
+    if (step < 0 || !hasNextPage) return;
+    const request = ++navigationRequest.current;
+    const currentId = dialog.file.id;
+    navigationInFlight.current = true;
+    setNavigating(true);
+    try {
+      // Share an existing page request rather than canceling and restarting it.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = await fetchNextPage({ cancelRefetch: false });
+        if (request !== navigationRequest.current) return;
+        if (result.isError) throw result.error;
+        const ids = new Set<string>();
+        const loaded = (
+          result.data?.pages.flatMap((page) => page.files) ?? []
+        ).filter((file) => {
+          if (ids.has(file.id)) return false;
+          ids.add(file.id);
+          return true;
+        });
+        const index = loaded.findIndex((file) => file.id === currentId);
+        if (index >= 0 && loaded[index + 1]) {
+          setDialog({ kind: 'preview', file: loaded[index + 1] });
+          break;
+        }
+        if (!result.hasNextPage) break;
+      }
+    } catch (cause) {
+      if (request === navigationRequest.current)
+        setNavigationError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not load the next item. Try the right arrow again.',
+        );
+    } finally {
+      if (request === navigationRequest.current) {
+        navigationInFlight.current = false;
+        setNavigating(false);
+      }
+    }
+  }
 
   async function refresh() {
     await Promise.all(
@@ -237,11 +316,11 @@ export function Gallery() {
           <h1>
             Gallery<span className="gallery-title-dot">.</span>
           </h1>
-          <p>Your images, one day at a time.</p>
+          <p>Your photos and videos, one day at a time.</p>
         </div>
         {count !== undefined && (
           <span className="gallery-total">
-            {count.toLocaleString()} {count === 1 ? 'image' : 'images'}
+            {count.toLocaleString()} {count === 1 ? 'item' : 'items'}
           </span>
         )}
       </header>
@@ -263,7 +342,7 @@ export function Gallery() {
           inert={deleting}
         >
           <FileTypeFilter
-            allLabel="All images"
+            allLabel="All photos & videos"
             options={query.data?.pages[0]?.fileTypes ?? []}
             value={types}
             onChange={(value) => {
@@ -308,7 +387,7 @@ export function Gallery() {
               aria-pressed={false}
               onClick={() => {
                 setDeleteMode(true);
-                setDialog(null);
+                closeDialog();
                 setNotice('');
               }}
             >
@@ -389,8 +468,8 @@ export function Gallery() {
           </h2>
           <p>
             {types.length
-              ? 'Try another image type to find your photos.'
-              : 'Your image uploads will appear here, arranged by date.'}
+              ? 'Try another file type to find your photos and videos.'
+              : 'Your photo and video uploads will appear here, arranged by date.'}
           </p>
         </div>
       )}
@@ -403,7 +482,7 @@ export function Gallery() {
           <div className="gallery-day-heading">
             <h2 id={`day-${day}`}>{dayHeading(day)}</h2>
             <span>
-              {items.length} {items.length === 1 ? 'image' : 'images'}
+              {items.length} {items.length === 1 ? 'item' : 'items'}
             </span>
           </div>
           <div className="gallery-rows">
@@ -419,7 +498,7 @@ export function Gallery() {
                     disabled={deleting}
                     starBusy={starBusy.includes(file.id)}
                     onSelect={() => toggleSelection(file.id)}
-                    onPreview={() => setDialog({ kind: 'preview', file })}
+                    onPreview={() => openPreview(file)}
                     onDetails={() => setDialog({ kind: 'details', file })}
                     onStar={() => void toggleStar(file)}
                   />
@@ -449,7 +528,7 @@ export function Gallery() {
       <Dialog
         open={Boolean(dialog && dialog.kind !== 'preview')}
         onOpenChange={(open) => {
-          if (!open) setDialog(null);
+          if (!open) closeDialog();
         }}
         title={
           dialog?.kind === 'details'
@@ -480,11 +559,26 @@ export function Gallery() {
         )}
       </Dialog>
       {dialog?.kind === 'preview' && (
-        <ImageLightbox
-          key={dialog.file.id}
-          url={`/api/files/${dialog.file.id}/content`}
+        <MediaLightbox
+          url={`/api/files/${dialog.file.id}/content${isGalleryVideo(dialog.file.originalFilename, dialog.file.mimeType) ? '?media=1' : ''}`}
           name={dialog.file.displayName}
-          onClose={() => setDialog(null)}
+          video={isGalleryVideo(
+            dialog.file.originalFilename,
+            dialog.file.mimeType,
+          )}
+          mimeType={dialog.file.mimeType}
+          downloadUrl={`/api/files/${dialog.file.id}/download`}
+          onClose={closeDialog}
+          navigation={{
+            onPrevious: () => void navigatePreview(-1),
+            onNext: () => void navigatePreview(1),
+            hasPrevious: previewIndex > 0,
+            hasNext:
+              previewIndex >= 0 &&
+              (previewIndex < files.length - 1 || Boolean(hasNextPage)),
+            busy: navigating,
+            error: navigationError,
+          }}
         />
       )}
       <Dialog
@@ -558,9 +652,10 @@ function GalleryTile({
   onStar,
 }: TileProps) {
   const [failedSource, setFailedSource] = useState('');
+  const video = isGalleryVideo(file.originalFilename, file.mimeType);
   const source = file.hasThumbnail
     ? `/api/files/${file.id}/content?thumbnail=1`
-    : file.sizeBytes <= 20 * 1024 * 1024
+    : !video && file.sizeBytes <= 20 * 1024 * 1024
       ? `/api/files/${file.id}/content`
       : '';
   const label = typeLabel(extensionOf(file.originalFilename), file.mimeType);
@@ -568,7 +663,7 @@ function GalleryTile({
   return (
     <article
       style={style}
-      className={`gallery-tile is-image ${deleteMode ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
+      className={`gallery-tile ${video ? 'is-video' : 'is-image'} ${deleteMode ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
     >
       <div className="gallery-tile-visual" aria-hidden="true">
         {source && failedSource !== source ? (
@@ -582,11 +677,21 @@ function GalleryTile({
           />
         ) : (
           <div className="gallery-file-art">
-            <Images size={38} strokeWidth={1.25} />
+            {video ? (
+              <Film size={38} strokeWidth={1.25} />
+            ) : (
+              <Images size={38} strokeWidth={1.25} />
+            )}
             <span>{label}</span>
           </div>
         )}
       </div>
+      {video && (
+        <span className="gallery-video-badge">
+          <Play size={12} fill="currentColor" />
+          {label}
+        </span>
+      )}
       {deleteMode ? (
         <label className="gallery-select-target">
           <input
