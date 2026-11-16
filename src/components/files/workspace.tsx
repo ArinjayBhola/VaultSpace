@@ -357,7 +357,7 @@ export function Workspace() {
     if (name === file.displayName) return;
     await api('/api/files', { operation: 'rename', id: file.id, name });
     queryClient.setQueriesData<FileResponse>(
-      { queryKey: ['files'] },
+      { queryKey: ['files'], predicate: (query) => query.queryKey[1] !== 'gallery' },
       (current) =>
         current
           ? {
@@ -411,11 +411,11 @@ export function Workspace() {
     if (optimistic) for (const id of ids) pendingStars.current.add(id);
     if (optimistic) await queryClient.cancelQueries({ queryKey: ['files'] });
     const previous = optimistic
-      ? queryClient.getQueriesData<FileResponse>({ queryKey: ['files'] })
+      ? queryClient.getQueriesData<FileResponse>({ queryKey: ['files'], predicate: (query) => query.queryKey[1] !== 'gallery' })
       : [];
     if (optimistic)
       queryClient.setQueriesData<FileResponse>(
-        { queryKey: ['files'] },
+        { queryKey: ['files'], predicate: (query) => query.queryKey[1] !== 'gallery' },
         (current) =>
           current
             ? {
@@ -669,15 +669,6 @@ export function Workspace() {
                 >
                   <FolderInput size={14} />
                   Move to folder
-                </Menu.Item>
-                <Menu.Item
-                  className="menu-item"
-                  onSelect={() =>
-                    void bulk(file.starredAt ? 'unstar' : 'star', [file.id])
-                  }
-                >
-                  <Star size={14} />
-                  {file.starredAt ? 'Remove star' : 'Add to starred'}
                 </Menu.Item>
                 <Menu.Item
                   className="menu-item"

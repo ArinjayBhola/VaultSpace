@@ -18,6 +18,7 @@ import {
   Activity,
   Star,
   Files,
+  Images,
   Link2,
   Trash2,
   BarChart3,
@@ -40,6 +41,7 @@ import { useLocalPreference } from '@/hooks/use-local-preference';
 const links = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/files', label: 'My files', icon: FolderClosed },
+  { href: '/gallery', label: 'Gallery', icon: Images },
   { href: '/recent', label: 'Recent', icon: Clock3 },
   { href: '/activity', label: 'Activity', icon: Activity },
   { href: '/starred', label: 'Starred', icon: Star },
@@ -365,7 +367,7 @@ export function Shell({
               <Menu size={20} />
             </button>
           </Tooltip>
-          <GlobalSearch />
+          {pathname === '/gallery' ? <div style={{ flex: 1 }} /> : <GlobalSearch />}
           <div className="topbar-actions">
             <span className="badge" style={{ whiteSpace: 'nowrap' }}>
               <ShieldCheck size={12} />

@@ -1,0 +1,84 @@
+.dialog-content.image-lightbox-dialog {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  max-height: none;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.image-lightbox-dialog > .dialog-title,
+.image-lightbox-dialog > .dialog-title + p {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.image-lightbox-dialog > .dialog-close {
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 2;
+  color: white;
+  background: #111827aa;
+  border-radius: 50%;
+}
+.lightbox-image-stage {
+  position: relative;
+  overflow: auto;
+  border-radius: 3px;
+  box-shadow: 0 14px 70px #0003;
+}
+.lightbox-image-canvas img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.lightbox-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: white;
+}
+.lightbox-zoom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 5px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 99px;
+  box-shadow: 0 4px 24px #0002;
+  flex-shrink: 0;
+}
+.lightbox-zoom-value {
+  min-width: 52px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.lightbox-image-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  color: white;
+  text-align: center;
+  padding: 16px;
+}
+.lightbox-image-error a {
+  text-decoration: underline;
+}

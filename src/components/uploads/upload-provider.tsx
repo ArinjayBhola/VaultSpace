@@ -495,10 +495,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
                       <div className="file-subtitle">
                         {item.state === 'Processing'
                           ? item.file.type === 'application/pdf'
-                            ? 'Uploaded ? generating thumbnail'
+                            ? 'Uploaded — generating thumbnail'
                             : 'Uploaded - preparing image preview'
                           : item.state === 'Ready'
-                            ? `Ready ? ${item.processing?.replaceAll('_', ' ') ?? 'original available'}`
+                            ? item.processing && item.processing !== 'ready'
+                              ? `Uploaded — ${item.processing.replaceAll('_', ' ')}`
+                              : 'Ready'
                             : item.state}
                         {item.state === 'Uploading' && item.speed > 0
                           ? ` · ${bytes(item.speed)}/s`

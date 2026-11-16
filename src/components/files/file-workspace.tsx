@@ -3,7 +3,8 @@ import { useDateFormatter } from '@/hooks/use-date-formatter';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { Dialog } from '@/components/ui/dialog';
-import { canPreviewFile } from '@/lib/file-types';
+import { canPreviewFile, rasterTypes } from '@/lib/file-types';
+import { ImageLightbox } from './image-lightbox';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -121,7 +122,14 @@ export function FileWorkspace({ id }: { id: string }) {
           </dl>
         </aside>
       </div>
-      {supported && (
+      {supported && rasterTypes.includes(file.mimeType) && expanded && (
+        <ImageLightbox
+          url={'/api/files/' + id + '/content'}
+          name={file.displayName}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
+      {supported && !rasterTypes.includes(file.mimeType) && (
         <Dialog
           open={expanded}
           onOpenChange={(open) => {

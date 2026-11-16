@@ -67,17 +67,22 @@ export function FileMetadataEditor({ file }: { file: VaultFile }) {
               }
             : current,
       );
-      client.setQueriesData<FileResponse>({ queryKey: ['files'] }, (current) =>
-        current
-          ? {
-              ...current,
-              files: current.files.map((item) =>
-                item.id === file.id
-                  ? { ...item, displayName: parsed.data, description }
-                  : item,
-              ),
-            }
-          : current,
+      client.setQueriesData<FileResponse>(
+        {
+          queryKey: ['files'],
+          predicate: (query) => query.queryKey[1] !== 'gallery',
+        },
+        (current) =>
+          current
+            ? {
+                ...current,
+                files: current.files.map((item) =>
+                  item.id === file.id
+                    ? { ...item, displayName: parsed.data, description }
+                    : item,
+                ),
+              }
+            : current,
       );
       setOpen(false);
       setNotice('Changes saved.');
