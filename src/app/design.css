@@ -2287,3 +2287,48 @@ body {
   flex-shrink: 0;
   color: var(--blue);
 }
+::selection {
+  background-color: #dbeafe;
+  color: #0f172a;
+  text-shadow: none;
+}
+
+.activity-panel-heading,
+.activity-heading-actions,
+.activity-page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.activity-panel-heading {
+  justify-content: space-between;
+}
+.activity-page-numbers {
+  justify-content: center;
+  gap: 5px;
+}
+.activity-page-number {
+  min-width: 36px;
+  justify-content: center;
+  padding: 8px;
+}
+.activity-page-number.is-current {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: var(--soft);
+}
+.activity-page-gap {
+  color: var(--muted);
+  padding: 0 3px;
+}
+@media (max-width: 640px) {
+  .activity-pagination {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .activity-page-numbers {
+    order: 1;
+    flex-basis: 100%;
+  }
+}

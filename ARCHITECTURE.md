@@ -54,3 +54,6 @@ File-page expansion shares its format capability map with ContentPreview, so uns
 
 
 Folder-lock responses carry an owner-authorized folder ID/name with HTTP 423. The client validates this error metadata, prompts without navigation, and retries only that authorization failure after the normal rate-limited unlock succeeds. Passwords are never included in deletion requests. Empty-trash and individual folder deletion resolve protected ancestry for all deletion targets under the vault write lock before creating cleanup jobs or marking folders for purge. Each locked attempt rolls back; the next authorized retry rechecks the current scope. Only the first accessible protected ancestor is disclosed, so nested passwords are requested in order.
+
+
+Activity clearing uses an authenticated, origin-checked POST with strict action validation and a single owner-scoped PostgreSQL deletion/count statement. It does not write an artificial clearing event. The client clears activity caches only after successful persistence, refreshes analytics activity and returns to page one. Activity GET clamps pages within its repeatable-read count/list snapshot, preventing stale page links after clearing or retention changes.

@@ -233,3 +233,22 @@ Replaced silent skipping of locked trash contents with a complete scope authoriz
 Added a shared authorization prompt/retry hook around workspace mutations. Password prompts show the actual protected folder name, retain wrong-password/rate-limit errors, support cancellation, and retry the original action after each successful unlock. Multiple required passwords are requested sequentially. The Trash folder menu also unlocks in place. Fixed subtree lock selection to return an actual password-bearing folder whose ancestors are accessible, rather than an arbitrary locked descendant. Existing valid session grants are reused.
 
 Production build including strict TypeScript, ESLint, formatting and whitespace checks passed. A read-only database execution confirmed the ancestry query is valid; the configured database had no locked trash target to challenge at that point. No data was restored/deleted, no test fixtures/files created and no test suite run. The full multi-folder password/cancel workflow remains for manual browser verification. No migration required. Changes remain local and uncommitted.
+
+
+## Softer text selection
+
+Applied a global pale blue text selection background with dark readable text, including form text and both themes. CSS formatting and whitespace checks passed. No tests added/run; visual browser review remains. Changes are uncommitted.
+
+
+## Application icons
+
+Added the blue VAULTSPACE layers mark as a vector app icon, a multi-resolution 16/32/48px favicon.ico, and a 180px Apple touch icon. Next.js file metadata conventions provide the icon links automatically on all routes, including login and sharing. Production build including TypeScript passed; generated app/icon and Apple icon routes were confirmed. No test files or test suite. Changes are uncommitted.
+
+
+## Activity clearing and numbered pagination
+
+Added a confirmed Clear activity control to /activity backed by an authenticated, CSRF/origin-checked, Zod-validated owner-scoped database deletion. Files/folders/shares are unaffected. Actual deletion counts drive success feedback, and activity/analytics caches refresh after persistence. Existing history was not cleared during implementation.
+
+Added first/last and nearby page-number links with ellipses, active-page semantics and responsive wrapping while retaining Previous/Next. Activity GET clamps out-of-range pages within the same read snapshot and the client updates the URL. Clearing resets all cached activity pages and page-one navigation. New activity continues recording normally.
+
+Production build including strict TypeScript and ESLint passed. No test files added and no test suite or destructive live-data check run. Browser interaction remains for manual review. No migration needed. Changes remain uncommitted alongside the preceding selection styling and app icons.

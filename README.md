@@ -143,3 +143,6 @@ File cards open the full file workspace. On /files/[id], use Expand preview for 
 
 
 Protected folders can be unlocked directly in Trash. Delete permanently and Empty trash request any missing folder passwords one at a time, showing each folder name, then continue the original action. Nested protected folders require their own passwords. Empty trash checks its complete current deletion scope before queuing new cleanup, so cancelling a password prompt does not partially empty that request. Existing unexpired session unlocks are reused.
+
+
+Activity history has numbered page navigation with ellipses and a confirmed Clear activity action. Clearing removes the owner's saved activity entries only; files, folders, collections and shares remain intact, and future actions are recorded normally. It also refreshes the overview activity timeline.

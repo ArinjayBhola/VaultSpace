@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { activityEvents, files } from '@/db/schema';
 import { owner } from '@/lib/auth';
-import { respond } from '@/lib/api';
+import { respond, originGuard, readJSON } from '@/lib/api';
 
 export async function GET(request: Request) {
   return respond(async () => {
@@ -26,6 +26,8 @@ export async function GET(request: Request) {
         .select({ count: sql<number>`count(*)::int` })
         .from(activityEvents)
         .where(and(eq(activityEvents.ownerId, user.id), accessible));
+      const pages = Math.max(1, Math.ceil(total.count / limit));
+      const currentPage = Math.min(page, pages);
       const items = await tx
         .select({
           id: activityEvents.id,
@@ -41,13 +43,29 @@ export async function GET(request: Request) {
         .where(and(eq(activityEvents.ownerId, user.id), accessible))
         .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
         .limit(limit)
-        .offset((page - 1) * limit);
+        .offset((currentPage - 1) * limit);
       return {
         items,
-        page,
+        page: currentPage,
         total: total.count,
-        pages: Math.max(1, Math.ceil(total.count / limit)),
+        pages,
       };
     });
+  });
+}
+
+export async function POST(request: Request) {
+  return respond(async () => {
+    originGuard(request);
+    const user = await owner();
+    z.object({ action: z.literal('clear') })
+      .strict()
+      .parse(await readJSON(request));
+    const result = await db().execute<{ deletedCount: number }>(sql`
+      with removed as (
+        delete from activity_events where owner_id=${user.id} returning 1
+      ) select count(*)::int as "deletedCount" from removed
+    `);
+    return { success: true, deletedCount: result.rows[0].deletedCount };
   });
 }
