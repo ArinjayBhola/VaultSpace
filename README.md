@@ -113,6 +113,8 @@ Private previews support raster images, browser-supported audio/video, escaped t
 
 Preview parsing runs only while viewing a file and is not stored or searched. HTML/SVG/code are shown as escaped text; unknown formats and executables are attachment-only. No files are sent to Google/Microsoft or another preview provider.
 
+Video cards now capture an actual video frame using the browser decoder, after a new upload or when an existing card comes into view in Gallery/My files. A single client queue avoids parallel decoding and duplicate preparation. The original local File is used after upload; existing videos use authenticated range delivery. Captures are capped at 640×480 pixels and 20 seconds of preparation time. An authenticated, origin-checked endpoint accepts at most 1 MiB of JPEG data, converts it to a WebP thumbnail with bounded Sharp decoding, and persists it privately in R2 with dimensions and a new cache version. Thumbnails are reused across visits; no FFmpeg installation, new schema, external viewer or AI service is needed. Videos that the current browser cannot decode retain the fallback icon and remain available to download. Preparation progresses while the app is open.
+
 Share forms default to tomorrow at the same local clock time. Existing active links replace the file-menu creation action with Revoke link; revocation still asks for confirmation. Share management shows active-link revocation rather than another Create link action while a link remains active. No schema migration is required for this update.
 
 ## Share lifecycle and saved link access

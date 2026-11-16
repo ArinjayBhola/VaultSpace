@@ -12,7 +12,6 @@ import Image from 'next/image';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import {
   Images,
-  Film,
   Play,
   LoaderCircle,
   Star,
@@ -35,6 +34,7 @@ import { localDateValue } from '@/lib/time';
 import { typeLabel, extensionOf, isGalleryVideo } from '@/lib/file-types';
 import { galleryRows } from '@/lib/gallery-layout';
 import { MediaLightbox } from '@/components/files/image-lightbox';
+import { VideoThumbnail } from '@/components/files/video-thumbnail';
 import type { FileResponse, VaultFile } from '@/types';
 import './gallery.css';
 
@@ -667,7 +667,9 @@ function GalleryTile({
       className={`gallery-tile ${video ? 'is-video' : 'is-image'} ${deleteMode ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
     >
       <div className="gallery-tile-visual" aria-hidden="true">
-        {source && failedSource !== source ? (
+        {video ? (
+          <VideoThumbnail file={file} />
+        ) : source && failedSource !== source ? (
           <Image
             src={source}
             alt=""
@@ -678,11 +680,7 @@ function GalleryTile({
           />
         ) : (
           <div className="gallery-file-art">
-            {video ? (
-              <Film size={38} strokeWidth={1.25} />
-            ) : (
-              <Images size={38} strokeWidth={1.25} />
-            )}
+            <Images size={38} strokeWidth={1.25} />
             <span>{label}</span>
           </div>
         )}

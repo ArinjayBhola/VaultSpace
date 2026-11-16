@@ -6,7 +6,8 @@ import { FolderUnlock } from '@/components/folders/unlock';
 import dynamic from 'next/dynamic';
 import { splitFileName, withFileExtension } from '@/lib/file-name';
 import { defaultShareExpiry } from '@/lib/time';
-import { typeLabel, extensionOf } from '@/lib/file-types';
+import { typeLabel, extensionOf, isGalleryVideo } from '@/lib/file-types';
+import { VideoThumbnail } from '@/components/files/video-thumbnail';
 import { fileQuery } from '@/lib/file-query';
 import { QUERY_STALE_TIME } from '@/lib/cache-policy';
 import { thumbnailUrl } from '@/lib/file-content-url';
@@ -1839,7 +1840,10 @@ export function Workspace() {
                             }}
                             aria-label={`Open ${f.displayName}`}
                           >
-                            {f.hasThumbnail && !trash ? (
+                            {!trash &&
+                            isGalleryVideo(f.originalFilename, f.mimeType) ? (
+                              <VideoThumbnail file={f} />
+                            ) : f.hasThumbnail && !trash ? (
                               <img
                                 loading="lazy"
                                 alt={f.displayName}

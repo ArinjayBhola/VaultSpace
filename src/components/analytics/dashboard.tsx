@@ -6,6 +6,8 @@ import { FileText, ArrowUpRight, Activity, Clock3 } from 'lucide-react';
 import { userTimeZone, timeZoneLabel } from '@/lib/time';
 import { activityLabel } from '@/lib/activity-label';
 import { api, bytes } from '@/lib/client';
+import { typeLabel } from '@/lib/file-types';
+import { storageColor } from '@/lib/storage-chart';
 import type { Analytics } from '@/types';
 export function AnalyticsPanels({ full = false }: { full?: boolean }) {
   const date = useDateFormatter();
@@ -19,14 +21,6 @@ export function AnalyticsPanels({ full = false }: { full?: boolean }) {
   if (error) return <div className="notice error">{error.message}</div>;
   if (!data) return <div className="skeleton" style={{ height: 200 }} />;
   const max = Math.max(1, ...data.timeline.map((d) => d.count));
-  const colors = [
-    '#3b82f6',
-    '#8b5cf6',
-    '#10b981',
-    '#f59e0b',
-    '#ec4899',
-    '#64748b',
-  ];
   return (
     <>
       <div className="split" style={{ marginTop: 27 }}>
@@ -183,9 +177,9 @@ export function AnalyticsPanels({ full = false }: { full?: boolean }) {
                           key={d.type}
                           style={{
                             width: `${(d.bytes / Math.max(1, data.activeBytes)) * 100}%`,
-                            background: colors[i % colors.length],
+                            background: storageColor(i),
                           }}
-                          title={`${d.type}: ${bytes(d.bytes)}`}
+                          title={`${typeLabel('', d.type)}: ${bytes(d.bytes)}`}
                         />
                       ))}
                     </div>
@@ -207,11 +201,12 @@ export function AnalyticsPanels({ full = false }: { full?: boolean }) {
                               width: 8,
                               height: 8,
                               borderRadius: 3,
-                              background: colors[i % colors.length],
+                              background: storageColor(i),
                               marginRight: 8,
                             }}
                           />
-                          {d.type} · {d.count} files
+                          {typeLabel('', d.type)} · {d.count}{' '}
+                          {d.count === 1 ? 'file' : 'files'}
                         </span>
                         <strong>{bytes(d.bytes)}</strong>
                       </div>

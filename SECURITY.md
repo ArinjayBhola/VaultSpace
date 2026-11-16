@@ -17,6 +17,8 @@ This is a code review record, not a penetration-test or production-readiness cer
 
 ## Release checks still required
 
+Video-frame uploads require the owner session, trusted origin and current folder access. Payloads are bounded to 1 MiB, require JPEG content/type signatures, and are decoded with a pixel limit before conversion to metadata-free WebP. The endpoint rechecks the current live file and protected-folder access under the vault transaction lock before persistence; it does not overwrite an existing thumbnail. Captures are performed by the owner's browser and are owner-supplied previews, not a server-side attestation of video contents. Existing deterministic derived-key deletion handles cleanup. Unsupported decoders leave originals and access policies intact.
+
 Manually verify critical workflows against isolated Neon and R2 resources; verify cookies, rate limits, CSRF rejection, storage signatures, multipart failures, duplicate completion, range delivery and request-driven cleanup under failures. Browser rendering/accessibility and cross-browser PDF highlight behavior still need manual browser verification.
 
 Verify Vercel log redaction for token-bearing paths and protect environment secrets and cloud dashboards. Confirm backups and recovery, dependency audit results, least-privilege R2 permissions and private bucket settings at deployment time.

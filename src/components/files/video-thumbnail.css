@@ -1,0 +1,29 @@
+.video-thumbnail-preview {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: #679794;
+  background: color-mix(in srgb, var(--surface) 88%, #88c7bc);
+}
+.video-thumbnail-preview > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.video-thumbnail-preview > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  font-weight: 650;
+}
+.file-preview .video-thumbnail-preview > img {
+  object-fit: contain;
+}

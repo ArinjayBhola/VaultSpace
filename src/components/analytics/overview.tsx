@@ -1,5 +1,7 @@
 'use client';
 import { typeLabel } from '@/lib/file-types';
+import { useState } from 'react';
+import { storageColor, storageArc } from '@/lib/storage-chart';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -31,14 +33,7 @@ export function Overview({
         '/api/analytics?timezone=' + encodeURIComponent(userTimeZone()),
       ),
   });
-  const palette = [
-    '#4f7ff0',
-    '#a69af1',
-    '#4b9e82',
-    '#e1a64b',
-    '#d17a8b',
-    '#6599bd',
-  ];
+  const [activeType, setActiveType] = useState<string | null>(null);
   const distribution = (data?.distribution ?? []).map((entry, index, all) => {
     const total = data?.activeBytes ?? 0;
     const start = total
@@ -48,14 +43,12 @@ export function Overview({
       : 0;
     return {
       ...entry,
-      color: palette[index % palette.length],
+      color: storageColor(index),
       start,
       end: start + (total ? (entry.bytes / total) * 100 : 0),
     };
   });
-  const gradient = distribution
-    .map((entry) => entry.color + ' ' + entry.start + '% ' + entry.end + '%')
-    .join(',');
+  const active = distribution.find((entry) => entry.type === activeType);
   return (
     <>
       <section className="overview-welcome">
@@ -104,42 +97,66 @@ export function Overview({
           </div>
           <div
             className="storage-donut"
-            role="img"
-            aria-label={
-              data
-                ? distribution
-                    .map(
-                      (entry) =>
-                        typeLabel('', entry.type) + ': ' + bytes(entry.bytes),
-                    )
-                    .join(', ')
-                : 'Loading storage breakdown'
-            }
-            style={{
-              background: data?.activeBytes
-                ? `conic-gradient(${gradient})`
-                : 'var(--border)',
-            }}
+            role="group"
+            aria-label="Storage by file type"
+            onPointerLeave={() => setActiveType(null)}
           >
-            <div>
-              <strong>{data ? bytes(data.activeBytes) : '—'}</strong>
-              <span>active files</span>
+            <svg
+              viewBox="0 0 100 100"
+              className="storage-donut-segments"
+              aria-label={
+                data
+                  ? 'Hover or focus a segment for its file type'
+                  : 'Loading storage breakdown'
+              }
+            >
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="var(--border)"
+                strokeWidth="8"
+              />
+              {distribution
+                .filter((entry) => entry.bytes > 0)
+                .map((entry) => {
+                  const label = `${typeLabel('', entry.type)} · ${bytes(entry.bytes)} · ${entry.count} ${entry.count === 1 ? 'file' : 'files'}`;
+                  return (
+                    <path
+                      key={entry.type}
+                      className="storage-donut-segment"
+                      d={storageArc(entry.start, entry.end)}
+                      fill="none"
+                      stroke={entry.color}
+                      strokeWidth="8"
+                      tabIndex={0}
+                      role="img"
+                      aria-label={label}
+                      onPointerEnter={() => setActiveType(entry.type)}
+                      onPointerLeave={() => setActiveType(null)}
+                      onFocus={() => setActiveType(entry.type)}
+                      onBlur={() => setActiveType(null)}
+                      onClick={() => setActiveType(entry.type)}
+                    >
+                      <title>{label}</title>
+                    </path>
+                  );
+                })}
+            </svg>
+            <div className="storage-donut-center">
+              <strong>
+                {active
+                  ? bytes(active.bytes)
+                  : data
+                    ? bytes(data.activeBytes)
+                    : '—'}
+              </strong>
+              <span>
+                {active ? typeLabel('', active.type) : 'active files'}
+              </span>
             </div>
           </div>
-          <div className="storage-donut-legend">
-            {distribution.map((entry) => (
-              <span key={entry.type}>
-                <i style={{ background: entry.color }} />
-                {typeLabel('', entry.type)}
-                <strong>{bytes(entry.bytes)}</strong>
-              </span>
-            ))}
-          </div>
-          <p>
-            {data
-              ? `${data.thisMonth} ${data.thisMonth === 1 ? 'file' : 'files'} added this month`
-              : 'Calculating from your files...'}
-          </p>
         </div>
       </section>
       <nav className="quick-access" aria-label="Quick access">

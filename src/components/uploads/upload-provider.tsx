@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { api, bytes } from '@/lib/client';
 import { Dialog } from '@/components/ui/dialog';
-import { uploadMime } from '@/lib/file-types';
+import { uploadMime, isGalleryVideo } from '@/lib/file-types';
 import { validFile } from '@/lib/validation';
 import { createUploadEstimate, uploadTimeLeft } from '@/lib/upload-estimate';
 type State =
@@ -78,6 +78,21 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const folder = useRef<string | null>(null);
   const controllers = useRef(new Map<string, AbortController>());
   const queryClient = useQueryClient();
+  function prepareVideoThumbnail(file: File, fileId: string) {
+    const mimeType = uploadMime(file.name, file.type);
+    if (!isGalleryVideo(file.name, mimeType)) return;
+    void import('@/lib/video-thumbnail')
+      .then(async ({ ensureVideoThumbnail, refreshVideoThumbnails }) => {
+        if (
+          await ensureVideoThumbnail(
+            { id: fileId, originalFilename: file.name, mimeType },
+            file,
+          )
+        )
+          refreshVideoThumbnails(queryClient);
+      })
+      .catch(() => {});
+  }
   const pendingProcessing = items
     .filter((item) => item.uploaded && item.state === 'Processing')
     .slice(0, 100)
@@ -349,6 +364,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       });
       verifying = true;
       await api('/api/uploads', { action: 'complete', id: session.id });
+      prepareVideoThumbnail(item.file, session.fileId);
       update(item.key, { state: 'Processing', speed: 0, uploaded: true });
       window.dispatchEvent(new Event('vault-operations'));
       void Promise.all(
@@ -366,6 +382,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       if (verifying && !cancelled && sessionId) {
         try {
           await api('/api/uploads', { action: 'complete', id: sessionId });
+          if (serverFileId) prepareVideoThumbnail(item.file, serverFileId);
           update(item.key, {
             state: 'Processing',
             uploaded: true,
@@ -520,7 +537,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
                         {item.state === 'Processing'
                           ? item.file.type === 'application/pdf'
                             ? 'Uploaded — generating thumbnail'
-                            : 'Uploaded - preparing image preview'
+                            : isGalleryVideo(
+                                  item.file.name,
+                                  uploadMime(item.file.name, item.file.type),
+                                )
+                              ? 'Uploaded — preparing video thumbnail'
+                              : 'Uploaded - preparing image preview'
                           : item.state === 'Ready'
                             ? item.processing && item.processing !== 'ready'
                               ? `Uploaded — ${item.processing.replaceAll('_', ' ')}`
