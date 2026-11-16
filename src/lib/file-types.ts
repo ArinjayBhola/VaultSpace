@@ -5,6 +5,14 @@ export const rasterTypes = [
   'image/gif',
   'image/avif',
 ];
+export const galleryImageExtensions = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'gif',
+  'avif',
+];
 export function needsThumbnail(mime: string) {
   return mime === 'application/pdf' || rasterTypes.includes(mime);
 }

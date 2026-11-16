@@ -5,10 +5,12 @@ export function FileTypeFilter({
   options,
   value,
   onChange,
+  allLabel = 'All file types',
 }: {
   options: { value: string; label: string; count: number }[];
   value: string[];
   onChange: (value: string[]) => void;
+  allLabel?: string;
 }) {
   const values = Array.from(new Set(value.filter((type) => type !== 'all')));
   const choices = [
@@ -28,7 +30,7 @@ export function FileTypeFilter({
   ];
   const label =
     values.length === 0
-      ? 'All file types'
+      ? allLabel
       : values.length === 1
         ? (choices.find((option) => option.value === values[0])?.label ??
           values[0].toUpperCase())
@@ -63,7 +65,7 @@ export function FileTypeFilter({
             <span className="type-filter-check">
               {values.length === 0 && <Check size={13} />}
             </span>
-            All file types
+            {allLabel}
           </Menu.CheckboxItem>
           <Menu.Separator className="menu-separator" />
           {choices.map((option) => (

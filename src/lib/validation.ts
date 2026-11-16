@@ -34,7 +34,7 @@ export const searchFilters = z.object({
     .default('relevance'),
   direction: z.enum(['asc', 'desc']).default('desc'),
   view: z
-    .enum(['all', 'root', 'recent', 'starred', 'documents', 'trash'])
+    .enum(['all', 'root', 'recent', 'starred', 'documents', 'trash', 'gallery'])
     .default('all'),
   type: z
     .preprocess(

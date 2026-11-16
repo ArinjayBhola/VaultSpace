@@ -11,10 +11,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import {
-  FileText,
-  File,
-  Film,
-  Music2,
   Images,
   LoaderCircle,
   Star,
@@ -32,22 +28,12 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { useFolderAuthorization } from '@/hooks/use-folder-authorization';
 import { api, bytes } from '@/lib/client';
 import { localDateValue } from '@/lib/time';
-import { typeLabel, extensionOf, rasterTypes } from '@/lib/file-types';
+import { typeLabel, extensionOf } from '@/lib/file-types';
 import { galleryRows } from '@/lib/gallery-layout';
 import { ImageLightbox } from '@/components/files/image-lightbox';
 import type { FileResponse, VaultFile } from '@/types';
 import './gallery.css';
 
-const ContentPreview = dynamic(
-  () =>
-    import('@/components/files/content-preview').then(
-      (module) => module.ContentPreview,
-    ),
-  {
-    ssr: false,
-    loading: () => <div className="skeleton" style={{ height: 360 }} />,
-  },
-);
 const FileDetails = dynamic(() =>
   import('@/components/files/details').then((module) => module.FileDetails),
 );
@@ -85,11 +71,11 @@ export function Gallery() {
     return () => observer.disconnect();
   }, []);
   const query = useInfiniteQuery({
-    queryKey: ['files', 'gallery', direction, [...types].sort()],
+    queryKey: ['files', 'gallery', 'images', direction, [...types].sort()],
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({
-        view: 'all',
+        view: 'gallery',
         sort: 'created',
         direction,
         limit: '100',
@@ -251,11 +237,11 @@ export function Gallery() {
           <h1>
             Gallery<span className="gallery-title-dot">.</span>
           </h1>
-          <p>Everything you’ve saved, one day at a time.</p>
+          <p>Your images, one day at a time.</p>
         </div>
         {count !== undefined && (
           <span className="gallery-total">
-            {count.toLocaleString()} {count === 1 ? 'file' : 'files'}
+            {count.toLocaleString()} {count === 1 ? 'image' : 'images'}
           </span>
         )}
       </header>
@@ -277,6 +263,7 @@ export function Gallery() {
           inert={deleting}
         >
           <FileTypeFilter
+            allLabel="All images"
             options={query.data?.pages[0]?.fileTypes ?? []}
             value={types}
             onChange={(value) => {
@@ -402,8 +389,8 @@ export function Gallery() {
           </h2>
           <p>
             {types.length
-              ? 'Try another file type to find your files.'
-              : 'Your uploads will appear here, arranged by date.'}
+              ? 'Try another image type to find your photos.'
+              : 'Your image uploads will appear here, arranged by date.'}
           </p>
         </div>
       )}
@@ -416,7 +403,7 @@ export function Gallery() {
           <div className="gallery-day-heading">
             <h2 id={`day-${day}`}>{dayHeading(day)}</h2>
             <span>
-              {items.length} {items.length === 1 ? 'file' : 'files'}
+              {items.length} {items.length === 1 ? 'image' : 'images'}
             </span>
           </div>
           <div className="gallery-rows">
@@ -460,13 +447,7 @@ export function Gallery() {
         )}
       </div>
       <Dialog
-        open={Boolean(
-          dialog &&
-          !(
-            dialog.kind === 'preview' &&
-            rasterTypes.includes(dialog.file.mimeType)
-          ),
-        )}
+        open={Boolean(dialog && dialog.kind !== 'preview')}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
         }}
@@ -482,19 +463,7 @@ export function Gallery() {
             ? `${bytes(dialog.file.sizeBytes)} · ${dialog.kind === 'preview' ? 'File preview' : dialog.file.displayName}`
             : ''
         }
-        className={dialog?.kind === 'preview' ? 'file-preview-dialog' : ''}
       >
-        {dialog?.kind === 'preview' && (
-          <div className="file-preview-dialog-body">
-            <ContentPreview
-              key={dialog.file.id}
-              url={`/api/files/${dialog.file.id}/content`}
-              name={dialog.file.displayName}
-              mimeType={dialog.file.mimeType}
-              size={dialog.file.sizeBytes}
-            />
-          </div>
-        )}
         {dialog?.kind === 'details' && (
           <FileDetails
             key={dialog.file.id}
@@ -510,15 +479,14 @@ export function Gallery() {
           />
         )}
       </Dialog>
-      {dialog?.kind === 'preview' &&
-        rasterTypes.includes(dialog.file.mimeType) && (
-          <ImageLightbox
-            key={dialog.file.id}
-            url={`/api/files/${dialog.file.id}/content`}
-            name={dialog.file.displayName}
-            onClose={() => setDialog(null)}
-          />
-        )}
+      {dialog?.kind === 'preview' && (
+        <ImageLightbox
+          key={dialog.file.id}
+          url={`/api/files/${dialog.file.id}/content`}
+          name={dialog.file.displayName}
+          onClose={() => setDialog(null)}
+        />
+      )}
       <Dialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -590,38 +558,17 @@ function GalleryTile({
   onStar,
 }: TileProps) {
   const [failedSource, setFailedSource] = useState('');
-  const image = file.mimeType.startsWith('image/');
-  const pdf = file.mimeType === 'application/pdf';
-  const video = file.mimeType.startsWith('video/');
-  const audio = file.mimeType.startsWith('audio/');
-  const raster = [
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-    'image/avif',
-    'image/bmp',
-  ].includes(file.mimeType);
   const source = file.hasThumbnail
     ? `/api/files/${file.id}/content?thumbnail=1`
-    : raster && file.sizeBytes <= 20 * 1024 * 1024
+    : file.sizeBytes <= 20 * 1024 * 1024
       ? `/api/files/${file.id}/content`
       : '';
-  const Icon = video
-    ? Film
-    : audio
-      ? Music2
-      : pdf
-        ? FileText
-        : image
-          ? Images
-          : File;
   const label = typeLabel(extensionOf(file.originalFilename), file.mimeType);
-  const path = pdf ? `/documents/${file.id}` : `/files/${file.id}`;
+  const path = `/files/${file.id}`;
   return (
     <article
       style={style}
-      className={`gallery-tile ${image ? 'is-image' : pdf ? 'is-pdf' : video ? 'is-video' : audio ? 'is-audio' : 'is-file'} ${deleteMode ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
+      className={`gallery-tile is-image ${deleteMode ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
     >
       <div className="gallery-tile-visual" aria-hidden="true">
         {source && failedSource !== source ? (
@@ -635,7 +582,7 @@ function GalleryTile({
           />
         ) : (
           <div className="gallery-file-art">
-            <Icon size={38} strokeWidth={1.25} />
+            <Images size={38} strokeWidth={1.25} />
             <span>{label}</span>
           </div>
         )}
@@ -658,12 +605,6 @@ function GalleryTile({
           aria-label={`Preview ${file.displayName}`}
           title={file.displayName}
         />
-      )}
-      {(video || audio || pdf) && (
-        <span className="gallery-kind">
-          <Icon size={12} />
-          {pdf ? 'PDF' : video ? 'VIDEO' : 'AUDIO'}
-        </span>
       )}
       <div className="gallery-tile-caption">
         <span>{file.displayName}</span>
