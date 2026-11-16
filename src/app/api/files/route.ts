@@ -23,6 +23,7 @@ import {
   event,
 } from '@/features/files/service';
 import { emptyTrash } from '@/lib/trash';
+import { invalidatePrivateBrowserCache } from '@/lib/private-cache';
 export async function GET(request: Request) {
   return respond(async () => {
     const user = await owner();
@@ -91,10 +92,18 @@ const mutation = z.discriminatedUnion('operation', [
   }),
 ]);
 export async function POST(request: Request) {
-  return respond(async () => {
+  let invalidateContent = false;
+  const response = await respond(async () => {
     originGuard(request);
     const user = await owner();
     const input = mutation.parse(await readJSON(request));
+    invalidateContent =
+      input.operation === 'rename' ||
+      input.operation === 'empty-trash' ||
+      input.operation === 'folder-delete' ||
+      (input.operation === 'bulk' &&
+        ['move', 'trash', 'restore', 'delete'].includes(input.action)) ||
+      (input.operation === 'folder-action' && input.action !== 'rename');
     if (
       input.operation === 'empty-trash' ||
       input.operation === 'folder-delete'
@@ -278,4 +287,5 @@ export async function POST(request: Request) {
       });
     return { success: true };
   });
+  return invalidateContent ? invalidatePrivateBrowserCache(response) : response;
 }

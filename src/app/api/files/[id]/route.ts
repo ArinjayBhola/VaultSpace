@@ -43,6 +43,7 @@ export async function GET(
         width: file.width,
         height: file.height,
         hasThumbnail: Boolean(file.thumbnailKey),
+        thumbnailVersion: file.processingVersion,
         relevance: 0,
       },
       processingError: job?.error ?? null,

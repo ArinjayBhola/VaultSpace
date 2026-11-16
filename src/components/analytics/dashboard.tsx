@@ -11,7 +11,6 @@ export function AnalyticsPanels({ full = false }: { full?: boolean }) {
   const date = useDateFormatter();
   const { data, error } = useQuery({
     queryKey: ['analytics', userTimeZone()],
-    staleTime: 120000,
     queryFn: () =>
       api<Analytics>(
         '/api/analytics?timezone=' + encodeURIComponent(userTimeZone()),

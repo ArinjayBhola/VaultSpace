@@ -265,8 +265,9 @@ function ContentPreviewBody({
         const limit = office ? 20 * 1024 * 1024 : text ? 512 * 1024 : 1024;
         const response = await fetch(url, {
           signal: controller.signal,
-          headers: { Range: 'bytes=0-' + (Math.min(size, limit) - 1) },
-          cache: 'no-store',
+          headers:
+            size > limit ? { Range: 'bytes=0-' + (limit - 1) } : undefined,
+          cache: 'default',
         });
         const data = await readBounded(response, limit, controller.signal);
         let result: Preview;

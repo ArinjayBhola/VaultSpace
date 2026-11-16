@@ -9,6 +9,7 @@ import { searchFilters } from '@/lib/validation';
 import { workspaceData } from '@/features/files/workspace-query';
 import { notFound } from 'next/navigation';
 import { Workspace } from '@/components/files/workspace';
+import { QUERY_STALE_TIME } from '@/lib/cache-policy';
 export default async function WorkspacePage({
   params,
   searchParams,
@@ -56,7 +57,7 @@ export default async function WorkspacePage({
   await client.fetchQuery({
     queryKey: ['files', key],
     queryFn: () => workspaceData(user.id, query.data),
-    staleTime: 60000,
+    staleTime: QUERY_STALE_TIME,
   });
   return (
     <HydrationBoundary state={dehydrate(client)}>

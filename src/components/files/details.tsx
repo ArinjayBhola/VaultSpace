@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { rasterTypes } from '@/lib/file-types';
 import { api, bytes } from '@/lib/client';
+import { thumbnailUrl } from '@/lib/file-content-url';
 import type { VaultFile } from '@/types';
 type Details = {
   file: VaultFile;
@@ -129,7 +130,7 @@ export function FileDetails({
         {pdf && file.hasThumbnail && (
           <img
             className="details-page-preview"
-            src={`/api/files/${file.id}/content?thumbnail=1`}
+            src={thumbnailUrl(file)}
             alt="First-page preview"
           />
         )}

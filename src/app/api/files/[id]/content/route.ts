@@ -1,5 +1,9 @@
 import { safeInline } from '@/lib/file-types';
-import { createHash } from 'node:crypto';
+import {
+  contentETag,
+  matchesETag,
+  privateContentHeaders,
+} from '@/lib/private-cache';
 import { owner } from '@/lib/auth';
 import { ownedFile } from '@/features/files/service';
 import { id } from '@/lib/validation';
@@ -23,38 +27,15 @@ export async function GET(
     const inlineVideo =
       url.searchParams.get('media') === '1' &&
       file.mimeType.startsWith('video/');
-    const range = request.headers.get('range');
+    let range = request.headers.get('range');
     if (range && !/^bytes=\d+-\d*$/.test(range))
       return new Response(null, { status: 416 });
-    const etag =
-      thumbnail && file.thumbnailKey
-        ? 'W/"' +
-          createHash('sha256')
-            .update(
-              file.thumbnailKey +
-                ':' +
-                file.thumbnailBytes +
-                ':' +
-                file.processingVersion,
-            )
-            .digest('hex') +
-          '"'
-        : null;
-    const cacheHeaders = new Headers({
-      'Cache-Control': etag ? 'private, no-cache' : 'private, no-store',
-      Vary: 'Cookie',
-    });
-    if (etag) cacheHeaders.set('ETag', etag);
+    const etag = contentETag(file, thumbnail);
+    const cacheHeaders = privateContentHeaders(etag, file.folderProtected);
+    const ifRange = request.headers.get('if-range');
+    if (range && ifRange && ifRange !== etag) range = null;
     // Authentication and current file authorization happen before revalidation.
-    if (
-      etag &&
-      !range &&
-      request.headers
-        .get('if-none-match')
-        ?.split(',')
-        .map((value) => value.trim().replace(/^W\//, ''))
-        .includes(etag.replace(/^W\//, ''))
-    ) {
+    if (!range && matchesETag(request.headers.get('if-none-match'), etag)) {
       return new Response(null, { status: 304, headers: cacheHeaders });
     }
     const object = await getObject(
@@ -83,7 +64,7 @@ export async function GET(
       'Accept-Ranges': 'bytes',
       'Content-Disposition': `${url.searchParams.get('download') === '1' || (!thumbnail && !safeInline(file.mimeType) && !inlineVideo) ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.displayName)}`,
     });
-    if (etag) headers.set('ETag', etag);
+    headers.set('ETag', etag);
     if (object.ContentLength !== undefined)
       headers.set('Content-Length', String(object.ContentLength));
     if (object.ContentRange) headers.set('Content-Range', object.ContentRange);

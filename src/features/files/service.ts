@@ -168,6 +168,7 @@ export async function listFiles(
         // qualifier. Keep the outer file ID qualified inside this subquery.
         activeShareCount: sql<number>`(select count(*)::int from share_links s where s.file_id=${sql.identifier('files')}.${sql.identifier('id')} and s.revoked_at is null and (s.expires_at is null or s.expires_at>now()))`,
         hasThumbnail: sql<boolean>`${files.thumbnailKey} is not null`,
+        thumbnailVersion: files.processingVersion,
         relevance: q ? ranking : sql<number>`0`,
       })
       .from(files)

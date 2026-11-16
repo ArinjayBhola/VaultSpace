@@ -8,6 +8,7 @@ import { owner, ApiError } from '@/lib/auth';
 import { respond, originGuard, readJSON } from '@/lib/api';
 import { folderScope, assertFolderAccess } from '@/lib/folder-access';
 import { id } from '@/lib/validation';
+import { invalidatePrivateBrowserCache } from '@/lib/private-cache';
 const inputSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('unlock'),
@@ -15,11 +16,11 @@ const inputSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('lock') }),
 ]);
-export function POST(
+export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  return respond(async () => {
+  const response = await respond(async () => {
     originGuard(request);
     const user = await owner();
     const folderId = id.parse((await context.params).id);
@@ -80,4 +81,5 @@ export function POST(
       });
     return { success: true, expiresAt };
   });
+  return invalidatePrivateBrowserCache(response);
 }

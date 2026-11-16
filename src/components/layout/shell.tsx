@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useUploads } from '@/components/uploads/upload-provider';
 import { userTimeZone } from '@/lib/time';
+import { QUERY_STALE_TIME } from '@/lib/cache-policy';
 import { api, bytes } from '@/lib/client';
 import type { Analytics } from '@/types';
 import { useLocalPreference } from '@/hooks/use-local-preference';
@@ -113,8 +114,8 @@ export function Shell({
       api<Analytics>(
         '/api/analytics?timezone=' + encodeURIComponent(userTimeZone()),
       ),
-    staleTime: 120000,
-    refetchInterval: 120000,
+    staleTime: QUERY_STALE_TIME,
+    refetchInterval: QUERY_STALE_TIME,
   });
   async function logout() {
     try {
@@ -367,7 +368,11 @@ export function Shell({
               <Menu size={20} />
             </button>
           </Tooltip>
-          {pathname === '/gallery' ? <div style={{ flex: 1 }} /> : <GlobalSearch />}
+          {pathname === '/gallery' ? (
+            <div style={{ flex: 1 }} />
+          ) : (
+            <GlobalSearch />
+          )}
           <div className="topbar-actions">
             <span className="badge" style={{ whiteSpace: 'nowrap' }}>
               <ShieldCheck size={12} />

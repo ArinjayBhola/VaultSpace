@@ -14,6 +14,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
 import { ApiError } from './auth';
+import { FILE_CACHE_SECONDS } from './cache-policy';
 let client: S3Client | undefined;
 export function r2() {
   const configuration = z
@@ -88,16 +89,20 @@ export const signPut = (key: string, mime: string, size: number) =>
     }),
     { expiresIn: 600 },
   );
-export const signGet = (key: string, filename: string) =>
+export const signGet = (key: string, filename: string, revalidate = false) =>
   getSignedUrl(
     r2(),
     new GetObjectCommand({
       Bucket: bucket(),
       Key: key,
       ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      ResponseCacheControl: revalidate
+        ? 'private, no-cache, must-revalidate'
+        : `private, max-age=${FILE_CACHE_SECONDS}, must-revalidate`,
     }),
     {
       expiresIn: 120,
+      signingDate: new Date(Math.floor(Date.now() / 30000) * 30000),
     },
   );
 export const createMultipart = (key: string, mime: string) =>

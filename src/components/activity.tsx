@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { activityLabel } from '@/lib/activity-label';
 import { api } from '@/lib/client';
+import { QUERY_STALE_TIME } from '@/lib/cache-policy';
 type ActivityPage = {
   items: {
     id: string;
@@ -52,7 +53,7 @@ export function ActivityHistory() {
   const { data, error, isPending, refetch } = useQuery({
     queryKey: ['activity', requestedPage],
     queryFn: () => api<ActivityPage>(`/api/activity?page=${requestedPage}`),
-    refetchInterval: 30000,
+    refetchInterval: QUERY_STALE_TIME,
   });
   const page = data?.page ?? requestedPage;
   const pages = data?.pages ?? 1;

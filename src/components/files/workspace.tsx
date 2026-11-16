@@ -8,6 +8,8 @@ import { splitFileName, withFileExtension } from '@/lib/file-name';
 import { defaultShareExpiry } from '@/lib/time';
 import { typeLabel, extensionOf } from '@/lib/file-types';
 import { fileQuery } from '@/lib/file-query';
+import { QUERY_STALE_TIME } from '@/lib/cache-policy';
+import { thumbnailUrl } from '@/lib/file-content-url';
 
 import { FileTypeFilter } from '@/components/files/type-filter';
 import { EditableFileName } from '@/components/files/editable-file-name';
@@ -245,8 +247,8 @@ export function Workspace() {
     queryFn: ({ signal }) =>
       api<FileResponse>(`/api/files?${key}`, undefined, 'GET', signal),
     enabled: !special,
-    staleTime: 60000,
-    refetchInterval: 120000,
+    staleTime: QUERY_STALE_TIME,
+    refetchInterval: QUERY_STALE_TIME,
   });
   const hasActiveFilters = fileFilterKeys.some(
     (key) =>
@@ -357,7 +359,10 @@ export function Workspace() {
     if (name === file.displayName) return;
     await api('/api/files', { operation: 'rename', id: file.id, name });
     queryClient.setQueriesData<FileResponse>(
-      { queryKey: ['files'], predicate: (query) => query.queryKey[1] !== 'gallery' },
+      {
+        queryKey: ['files'],
+        predicate: (query) => query.queryKey[1] !== 'gallery',
+      },
       (current) =>
         current
           ? {
@@ -411,11 +416,17 @@ export function Workspace() {
     if (optimistic) for (const id of ids) pendingStars.current.add(id);
     if (optimistic) await queryClient.cancelQueries({ queryKey: ['files'] });
     const previous = optimistic
-      ? queryClient.getQueriesData<FileResponse>({ queryKey: ['files'], predicate: (query) => query.queryKey[1] !== 'gallery' })
+      ? queryClient.getQueriesData<FileResponse>({
+          queryKey: ['files'],
+          predicate: (query) => query.queryKey[1] !== 'gallery',
+        })
       : [];
     if (optimistic)
       queryClient.setQueriesData<FileResponse>(
-        { queryKey: ['files'], predicate: (query) => query.queryKey[1] !== 'gallery' },
+        {
+          queryKey: ['files'],
+          predicate: (query) => query.queryKey[1] !== 'gallery',
+        },
         (current) =>
           current
             ? {
@@ -1832,7 +1843,7 @@ export function Workspace() {
                               <img
                                 loading="lazy"
                                 alt={f.displayName}
-                                src={`/api/files/${f.id}/content?thumbnail=1`}
+                                src={thumbnailUrl(f)}
                               />
                             ) : (
                               <div

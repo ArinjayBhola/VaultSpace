@@ -3,6 +3,7 @@
 import { PasswordInput } from '@/components/ui/password-input';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -15,6 +16,7 @@ const schema = z.object({
 });
 export function Login({ configured }: { configured: boolean }) {
   const router = useRouter();
+  const client = useQueryClient();
   const [error, setError] = useState('');
   const {
     register,
@@ -35,6 +37,7 @@ export function Login({ configured }: { configured: boolean }) {
           data.message ?? 'Unable to sign in. Check your credentials.',
         );
       }
+      client.clear();
       router.push('/');
       router.refresh();
     } catch (e) {

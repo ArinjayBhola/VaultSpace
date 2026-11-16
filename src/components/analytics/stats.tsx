@@ -14,7 +14,6 @@ import type { Analytics } from '@/types';
 export function Stats() {
   const { data, error, isPending } = useQuery({
     queryKey: ['analytics', userTimeZone()],
-    staleTime: 120000,
     queryFn: () =>
       api<Analytics>(
         '/api/analytics?timezone=' + encodeURIComponent(userTimeZone()),

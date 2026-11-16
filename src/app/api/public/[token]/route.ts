@@ -14,6 +14,11 @@ import {
   checkSharePassword,
 } from '@/lib/sharing';
 import { getObject } from '@/lib/storage';
+import {
+  contentETag,
+  matchesETag,
+  privateContentHeaders,
+} from '@/lib/private-cache';
 type Context = { params: Promise<{ token: string }> };
 export async function POST(request: Request, context: Context) {
   return respond(async () => {
@@ -65,14 +70,22 @@ export async function GET(request: Request, context: Context) {
         'GRANT_REQUIRED',
         'Open the share and authorize access again.',
       );
-    const range = request.headers.get('range');
+    let range = request.headers.get('range');
     if (range && !/^bytes=\d+-\d*$/.test(range))
       return new Response(null, { status: 416 });
+    const etag = contentETag(row.file);
+    const cacheHeaders = privateContentHeaders(etag, true);
+    const ifRange = request.headers.get('if-range');
+    if (range && ifRange && ifRange !== etag) range = null;
+    if (!range && matchesETag(request.headers.get('if-none-match'), etag))
+      return new Response(null, { status: 304, headers: cacheHeaders });
     const object = await getObject(row.file.r2ObjectKey, range ?? undefined);
     if (!object.Body) throw new Error('File unavailable');
     const headers = new Headers({
       'Content-Type': row.file.mimeType,
-      'Cache-Control': 'private, no-store',
+      'Cache-Control': cacheHeaders.get('Cache-Control')!,
+      ETag: etag,
+      Vary: 'Cookie',
       'Accept-Ranges': 'bytes',
       'Content-Disposition': `${safeInline(row.file.mimeType) ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(row.file.displayName)}`,
     });

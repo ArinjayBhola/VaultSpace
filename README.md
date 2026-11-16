@@ -31,7 +31,7 @@ File preparation and cleanup run through authenticated `/api/operations` request
 - Owner login/logout, database sessions, password changes, profile updates, and session revocation.
 - Private, verified direct uploads; real XHR progress; 16 MiB multipart parts; configurable part concurrency; retries and cancellation; duplicate checksum choices.
 - Grid/list file browsing with database pagination and sorting; nested folders with cycle checks; rename/description/move/star; virtual collections; bulk file actions.
-- Private previews and range delivery; request-generated image/PDF thumbnails; two-minute owner download signatures.
+- Private previews and range delivery; request-generated image/PDF thumbnails; short-lived owner download signatures.
 - PDF.js reader with page thumbnails, zoom/fit/rotation/fullscreen, browser printing, text selection highlights, notes, bookmarks, and saved page/zoom.
 - Database-backed file-name and file-type search, with server-side filtering, sorting and pagination.
 - High-entropy hashed share tokens; optional scrypt passwords; expiration/revocation; five-minute HttpOnly public access grants; live validated-access counters.
@@ -56,7 +56,11 @@ These describe implemented integrations, **not successful cloud tests**.
 
 ## Search and operational limits
 
-File pages hydrate initial owner-scoped results from the server. Autocomplete uses `/api/search/suggestions` (five matches, one application query); workspace reads run concurrently. File metadata stays fresh for one minute, with file/analytics refresh intervals of two minutes and earlier mutation-specific invalidation. Idle operation polling backs off to two minutes and wakes immediately on local upload/cleanup events. Thumbnail responses support private ETag revalidation after authentication; originals and public shares remain non-cacheable.
+File pages hydrate initial owner-scoped results from the server. Autocomplete uses `/api/search/suggestions` (five matches, one application query); workspace reads run concurrently. Client query data stays fresh for five minutes and unused queries remain in memory for 30 minutes; ordinary file/analytics refresh intervals are five minutes, with earlier mutation-specific invalidation. Switching browser tabs does not trigger extra reads. Idle operation polling backs off to two minutes and wakes immediately on local upload/cleanup events.
+
+All owner file formats, originals and thumbnails support private browser caching for five minutes, with strong ETags and authenticated conditional `304` responses after expiry. Protected-folder content and public shares store bytes privately but revalidate access on every reuse. Thumbnail URLs include a processing version so reprocessing refreshes the preview immediately after metadata invalidation. Login/logout, security changes, folder access changes, rename, move, trash, restore and permanent-deletion requests clear/partition old browser entries using `Clear-Site-Data: "cache"` and an HttpOnly revision cookie; preferences are retained. These are browser caches, not public CDN caches or offline storage. Browsers may evict files or request additional video/PDF ranges.
+
+Downloads still stream directly from private R2. Owner download redirects can be reused for 60 seconds, with signed URLs generated in 30-second windows and valid for at least 90 seconds when issued. Signed responses explicitly allow five-minute private caching; protected downloads revalidate. Text/Office previews use normal HTTP caching and request only bounded ranges when necessary. Upload progress, pending preparation, maintenance and share-presence requests remain live. Query caches are in memory and do not persist across a full page reload.
 
 Vercel functions are configured for Singapore (`sin1`) to match the configured Neon region (`ap-southeast-1`). Deploy this configuration for it to take effect; update it if the production database moves.
 

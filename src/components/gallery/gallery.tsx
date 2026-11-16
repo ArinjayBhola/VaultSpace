@@ -29,6 +29,8 @@ import { Dialog } from '@/components/ui/dialog';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useFolderAuthorization } from '@/hooks/use-folder-authorization';
 import { api, bytes } from '@/lib/client';
+import { QUERY_STALE_TIME } from '@/lib/cache-policy';
+import { thumbnailUrl } from '@/lib/file-content-url';
 import { localDateValue } from '@/lib/time';
 import { typeLabel, extensionOf, isGalleryVideo } from '@/lib/file-types';
 import { galleryRows } from '@/lib/gallery-layout';
@@ -97,9 +99,8 @@ export function Gallery() {
     },
     getNextPageParam: (last) =>
       last.page * last.limit < last.count ? last.page + 1 : undefined,
-    staleTime: 60000,
-    refetchInterval: dialog?.kind === 'preview' ? false : 120000,
-    refetchOnWindowFocus: dialog?.kind !== 'preview',
+    staleTime: QUERY_STALE_TIME,
+    refetchInterval: dialog?.kind === 'preview' ? false : QUERY_STALE_TIME,
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isError } = query;
   useEffect(() => {
@@ -654,7 +655,7 @@ function GalleryTile({
   const [failedSource, setFailedSource] = useState('');
   const video = isGalleryVideo(file.originalFilename, file.mimeType);
   const source = file.hasThumbnail
-    ? `/api/files/${file.id}/content?thumbnail=1`
+    ? thumbnailUrl(file)
     : !video && file.sizeBytes <= 20 * 1024 * 1024
       ? `/api/files/${file.id}/content`
       : '';
