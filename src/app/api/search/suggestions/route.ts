@@ -1,5 +1,5 @@
 import { folderScope, fileAccessSQL } from '@/lib/folder-access';
-import { and, eq, isNull, asc, sql } from 'drizzle-orm';
+import { and, eq, isNull, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { files } from '@/db/schema';
@@ -33,11 +33,7 @@ export async function GET(request: Request) {
           sql`(${files.displayName} ilike ${pattern} or ${files.originalFilename} ilike ${pattern} or ${files.extension} ilike ${pattern} or ${files.mimeType} ilike ${pattern})`,
         ),
       )
-      .orderBy(
-        sql`case when lower(${files.displayName})=lower(${q}) then 0 else 1 end`,
-        asc(files.displayName),
-        asc(files.id),
-      )
+      .orderBy(desc(files.createdAt), desc(files.id))
       .limit(5);
     return { files: matches };
   });

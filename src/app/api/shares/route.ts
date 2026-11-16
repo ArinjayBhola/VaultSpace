@@ -71,11 +71,7 @@ export async function GET(request: Request) {
       .from(shareLinks)
       .innerJoin(files, eq(files.id, shareLinks.fileId))
       .where(where)
-      .orderBy(
-        desc(sql`case when ${active} then 1 else 0 end`),
-        desc(sql`coalesce(${endedAt},${shareLinks.createdAt})`),
-        desc(shareLinks.id),
-      )
+      .orderBy(desc(shareLinks.createdAt), desc(shareLinks.id))
       .limit(25)
       .offset((query.page - 1) * 25);
     const [totals] = await db()

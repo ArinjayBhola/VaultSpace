@@ -8,7 +8,7 @@ export function fileQuery(pathname: string, search: URLSearchParams) {
     : null;
   const view =
     pathname === '/'
-      ? 'recent'
+      ? 'all'
       : pathname === '/trash'
         ? 'trash'
         : pathname === '/starred'

@@ -179,6 +179,7 @@ export async function listFiles(
           : input.direction === 'asc'
             ? asc(column)
             : desc(column),
+        desc(files.createdAt),
         desc(files.id),
       )
       .limit(input.limit)
@@ -371,7 +372,7 @@ export async function listFolders(
             : isNull(folders.parentId),
       ),
     )
-    .orderBy(asc(folders.name))
+    .orderBy(desc(folders.createdAt), desc(folders.id))
     .limit(100)
     .offset((page - 1) * 100);
 }
@@ -400,7 +401,7 @@ export async function listCollections(
           : undefined,
       ),
     )
-    .orderBy(asc(collections.name))
+    .orderBy(desc(collections.createdAt), desc(collections.id))
     .limit(100)
     .offset((page - 1) * 100);
 }

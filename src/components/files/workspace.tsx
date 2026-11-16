@@ -1569,10 +1569,7 @@ export function Workspace() {
                   <div className="file-toolbar-actions">
                     <Select
                       aria-label="Sort files"
-                      value={
-                        params.get('sort') ??
-                        (params.get('q') ? 'relevance' : 'created')
-                      }
+                      value={params.get('sort') ?? 'created'}
                       onChange={(e) => filter('sort', e.target.value)}
                       style={{
                         fontSize:

@@ -31,7 +31,7 @@ export const searchFilters = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(24),
   sort: z
     .enum(['relevance', 'name', 'created', 'modified', 'size', 'type'])
-    .default('relevance'),
+    .default('created'),
   direction: z.enum(['asc', 'desc']).default('desc'),
   view: z
     .enum(['all', 'root', 'recent', 'starred', 'documents', 'trash', 'gallery'])

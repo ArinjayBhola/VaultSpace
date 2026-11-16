@@ -76,7 +76,7 @@ export async function GET(request: Request) {
           })
           .from(activityEvents)
           .where(eq(activityEvents.ownerId, user.id))
-          .orderBy(desc(activityEvents.createdAt))
+          .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
           .limit(8),
         db().select().from(settings).where(eq(settings.ownerId, user.id)),
       ]);

@@ -6,7 +6,7 @@ import {
 import { vaultWriteLock } from '@/db/lock';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { and, eq, sql, inArray } from 'drizzle-orm';
+import { and, eq, sql, inArray, isNull } from 'drizzle-orm';
 import { verifiedMime } from '@/lib/file-verification';
 import { uploadMime, extensionOf, needsThumbnail } from '@/lib/file-types';
 import { db } from '@/db';
@@ -126,6 +126,7 @@ export async function POST(request: Request) {
               eq(files.ownerId, user.id),
               eq(files.checksum, input.checksum),
               eq(files.uploadStatus, 'complete'),
+              isNull(files.deletedAt),
               fileAccessSQL(scope.sessionId),
             ),
           )
