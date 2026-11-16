@@ -24,6 +24,7 @@ import { api, bytes } from '@/lib/client';
 import { Dialog } from '@/components/ui/dialog';
 import { uploadMime } from '@/lib/file-types';
 import { validFile } from '@/lib/validation';
+import { createUploadEstimate, uploadTimeLeft } from '@/lib/upload-estimate';
 type State =
   | 'Queued'
   | 'Preparing'
@@ -40,6 +41,8 @@ type Item = {
   state: State;
   progress: number;
   speed: number;
+  secondsLeft?: number | null;
+  stalled?: boolean;
   error?: string;
   sessionId?: string;
   fileId?: string;
@@ -190,8 +193,16 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     let sessionId: string | undefined;
     let serverFileId: string | undefined;
     let verifying = false;
+    let progressTimer: ReturnType<typeof setInterval> | undefined;
     try {
-      update(item.key, { state: 'Preparing', progress: 0, error: undefined });
+      update(item.key, {
+        state: 'Preparing',
+        progress: 0,
+        speed: 0,
+        secondsLeft: null,
+        stalled: false,
+        error: undefined,
+      });
       const policy = await queryClient.fetchQuery({
         queryKey: ['upload-policy'],
         queryFn: () => api<{ maxBytes: number }>('/api/uploads'),
@@ -256,7 +267,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       if (controller.signal.aborted)
         throw new DOMException('Upload cancelled', 'AbortError');
       update(item.key, { state: 'Uploading' });
-      const start = performance.now();
+      const estimate = createUploadEstimate(item.file.size, performance.now());
       let completed = 0;
       const loaded = new Map<number, number>();
       const progress = () => {
@@ -264,9 +275,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           completed + [...loaded.values()].reduce((a, b) => a + b, 0);
         update(item.key, {
           progress: Math.min(100, (total / item.file.size) * 100),
-          speed: total / Math.max(0.1, (performance.now() - start) / 1000),
+          ...estimate(total, performance.now()),
         });
       };
+      progressTimer = setInterval(progress, 1000);
       if (session.multipart) {
         const parts = Math.ceil(item.file.size / session.partSize);
         let next = 1;
@@ -297,6 +309,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
               } catch (e) {
                 if (controller.signal.aborted || attempt >= 2) throw e;
                 loaded.delete(part);
+                progress();
                 await new Promise((resolve) =>
                   setTimeout(resolve, 500 * 2 ** attempt),
                 );
@@ -325,7 +338,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           progress();
         });
       }
-      update(item.key, { state: 'Verifying', progress: 100 });
+      clearInterval(progressTimer);
+      progressTimer = undefined;
+      update(item.key, {
+        state: 'Verifying',
+        progress: 100,
+        speed: 0,
+        secondsLeft: null,
+        stalled: false,
+      });
       verifying = true;
       await api('/api/uploads', { action: 'complete', id: session.id });
       update(item.key, { state: 'Processing', speed: 0, uploaded: true });
@@ -336,6 +357,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         ),
       );
     } catch (e) {
+      clearInterval(progressTimer);
+      progressTimer = undefined;
       const cancelled =
         controller.signal.aborted ||
         (e instanceof DOMException && e.name === 'AbortError');
@@ -384,6 +407,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } finally {
+      clearInterval(progressTimer);
       controllers.current.delete(item.key);
     }
   }
@@ -506,6 +530,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
                           ? ` · ${bytes(item.speed)}/s`
                           : ''}
                       </div>
+                      {item.state === 'Uploading' && (
+                        <div className="file-subtitle">
+                          {item.progress >= 100
+                            ? 'Finishing transfer…'
+                            : item.stalled
+                              ? 'Waiting for upload progress…'
+                              : uploadTimeLeft(item.secondsLeft ?? null)}
+                        </div>
+                      )}
                     </div>
                     {item.state === 'Failed' && (
                       <Tooltip label={`Retry ${item.file.name}`}>
