@@ -474,7 +474,7 @@ export function Gallery() {
           </p>
         </div>
       )}
-      {Array.from(groups, ([day, items]) => (
+      {Array.from(groups, ([day, items], groupIndex) => (
         <section
           className="gallery-day"
           key={day}
@@ -487,12 +487,13 @@ export function Gallery() {
             </span>
           </div>
           <div className="gallery-rows">
-            {galleryRows(items, galleryWidth).map((row) => (
+            {galleryRows(items, galleryWidth).map((row, rowIndex) => (
               <div className="gallery-photo-row" key={row.files[0].id}>
                 {row.files.map((file, index) => (
                   <GalleryTile
                     key={file.id}
                     file={file}
+                    eager={groupIndex === 0 && rowIndex === 0}
                     style={{ width: row.widths[index], height: row.height }}
                     deleteMode={deleteMode}
                     selected={selected.includes(file.id)}
@@ -630,6 +631,7 @@ function dayHeading(day: string) {
 
 type TileProps = {
   file: VaultFile;
+  eager: boolean;
   style: CSSProperties;
   deleteMode: boolean;
   selected: boolean;
@@ -642,6 +644,7 @@ type TileProps = {
 };
 function GalleryTile({
   file,
+  eager,
   style,
   deleteMode,
   selected,
@@ -675,6 +678,7 @@ function GalleryTile({
             alt=""
             fill
             unoptimized
+            loading={eager ? 'eager' : 'lazy'}
             sizes="(max-width: 480px) 33vw, (max-width: 700px) 25vw, 17vw"
             onError={() => setFailedSource(source)}
           />
